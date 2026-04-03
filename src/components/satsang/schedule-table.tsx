@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import {
-  Download, Filter, ChevronDown, ChevronRight,
+  Download, Filter, ChevronDown, ChevronRight, Calendar, MapPin,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ import { toast } from "sonner";
 interface ScheduleTableProps {
   schedule: GeneratedSchedule;
 }
+
+type ViewMode = "date" | "center";
 
 const categoryColors: Record<string, string> = {
   SP: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
@@ -55,20 +57,76 @@ function pathiBadge(value: string, slot: string) {
   );
 }
 
+/** Parse a date string like "03-Apr" into sortable YYYY-MM-DD (assume current year) */
+function parseDateSortable(dateStr: string): string {
+  if (!dateStr) return "";
+  const months: Record<string, string> = {
+    Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+    Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+  };
+  const parts = dateStr.trim().split("-");
+  if (parts.length === 2) {
+    const day = parts[0].padStart(2, "0");
+    const month = months[parts[1]] || "01";
+    return `2026-${month}-${day}`;
+  }
+  return dateStr;
+}
+
 export function ScheduleTable({ schedule }: ScheduleTableProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>("date");
   const [placeFilter, setPlaceFilter] = useState<string>("all");
-  const [expandedCenters, setExpandedCenters] = useState<Set<string>>(new Set());
-  const [showAllCenters, setShowAllCenters] = useState(false);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
 
   const hasAnyBaalSatsang = useMemo(
     () => schedule.entries.some((e) => e.hasBaalSatsang),
     [schedule.entries]
   );
 
-  // Group entries by center
+  const uniquePlaces = useMemo(
+    () => [...new Set(schedule.entries.map((e) => e.gharName))].sort(),
+    [schedule.entries]
+  );
+
+  // ─── DATE VIEW: group all entries by date, sorted chronologically ───
+  const groupedByDate = useMemo(() => {
+    const groups: Map<string, typeof schedule.entries> = new Map();
+    const filteredEntries =
+      placeFilter === "all"
+        ? schedule.entries
+        : schedule.entries.filter((e) => e.gharName === placeFilter);
+
+    for (const entry of filteredEntries) {
+      const key = entry.entry.date;
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(entry);
+    }
+
+    // Sort entries within each date by time
+    for (const [, entries] of groups) {
+      entries.sort((a, b) => a.entry.time.localeCompare(b.entry.time));
+    }
+
+    // Sort dates chronologically
+    const sorted = [...groups.entries()].sort((a, b) =>
+      parseDateSortable(a[0]).localeCompare(parseDateSortable(b[0]))
+    );
+    return new Map(sorted);
+  }, [schedule.entries, placeFilter]);
+
+  const dateKeys = useMemo(() => [...groupedByDate.keys()], [groupedByDate]);
+
+  // ─── CENTER VIEW: group entries by center ───
   const groupedByCenter = useMemo(() => {
     const groups: Map<string, { category: string; entries: typeof schedule.entries }> = new Map();
-    for (const entry of schedule.entries) {
+    const filteredEntries =
+      placeFilter === "all"
+        ? schedule.entries
+        : schedule.entries.filter((e) => e.gharName === placeFilter);
+
+    for (const entry of filteredEntries) {
       if (!groups.has(entry.gharName)) {
         groups.set(entry.gharName, { category: entry.gharCategory, entries: [] });
       }
@@ -77,12 +135,12 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
     // Sort entries within each center by date then time
     for (const [, group] of groups) {
       group.entries.sort((a, b) => {
-        const dateCmp = a.entry.date.localeCompare(b.entry.date);
+        const dateCmp = parseDateSortable(a.entry.date).localeCompare(parseDateSortable(b.entry.date));
         if (dateCmp !== 0) return dateCmp;
         return a.entry.time.localeCompare(b.entry.time);
       });
     }
-    // Sort centers: SP first, then SC, then C, alphabetically within
+    // Sort centers by category then name
     const sorted = [...groups.entries()].sort((a, b) => {
       const order = (cat: string) => cat === "SP" ? 0 : cat === "SC" ? 1 : 2;
       const catDiff = order(a[1].category) - order(b[1].category);
@@ -90,70 +148,64 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
       return a[0].localeCompare(b[0]);
     });
     return new Map(sorted);
-  }, [schedule.entries]);
+  }, [schedule.entries, placeFilter]);
 
-  const centerNames = useMemo(
-    () => [...groupedByCenter.keys()],
-    [groupedByCenter]
-  );
+  const centerNames = useMemo(() => [...groupedByCenter.keys()], [groupedByCenter]);
 
-  const filteredCenters = useMemo(() => {
-    if (placeFilter === "all") return centerNames;
-    return centerNames.filter((c) => c === placeFilter);
-  }, [centerNames, placeFilter]);
+  // ─── Expand / collapse logic (works for both views) ───
+  const allKeys = viewMode === "date" ? dateKeys : centerNames;
 
-  // Auto-expand when filter is set to a specific center
-  const visibleExpandedCenters = useMemo(() => {
-    if (placeFilter !== "all" && placeFilter) {
-      return new Set([placeFilter]);
-    }
-    if (showAllCenters) return new Set(centerNames);
-    return expandedCenters;
-  }, [expandedCenters, centerNames, placeFilter, showAllCenters]);
+  const expandedSet = useMemo(() => {
+    if (placeFilter !== "all" && placeFilter) return new Set([placeFilter]);
+    if (showAll) return new Set(allKeys);
+    return expandedKeys;
+  }, [expandedKeys, allKeys, placeFilter, showAll]);
 
-  const toggleCenter = useCallback((name: string) => {
-    setExpandedCenters((prev) => {
+  const toggleKey = useCallback((key: string) => {
+    setExpandedKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
 
   const expandAll = useCallback(() => {
-    setShowAllCenters(true);
-    setExpandedCenters(new Set(centerNames));
-  }, [centerNames]);
+    setShowAll(true);
+    setExpandedKeys(new Set(allKeys));
+  }, [allKeys]);
 
   const collapseAll = useCallback(() => {
-    setShowAllCenters(false);
-    setExpandedCenters(new Set());
+    setShowAll(false);
+    setExpandedKeys(new Set());
   }, []);
 
-  const allExpanded = filteredCenters.length > 0 && filteredCenters.every((c) => visibleExpandedCenters.has(c));
+  const isAllExpanded = allKeys.length > 0 && allKeys.every((k) => expandedSet.has(k));
 
+  // ─── CSV export (always date-sorted) ───
   const exportCSV = useCallback(() => {
     const header = hasAnyBaalSatsang
       ? "Date,Time,Place,Category,SK,Shabad,Bani,Book,Pathi-A,Pathi-B,Pathi-C,Pathi-D"
       : "Date,Time,Place,Category,SK,Shabad,Bani,Book,Pathi-A,Pathi-B,Pathi-C";
     const rows = [header];
     function csvEscape(s: string): string {
-      if (s.includes(",") || s.includes('"')) {
-        return '"' + s.replace(/"/g, '"') + '"';
-      }
+      if (s.includes(",") || s.includes('"')) return '"' + s.replace(/"/g, '"') + '"';
       return s;
     }
-    for (const centerName of centerNames) {
-      const group = groupedByCenter.get(centerName)!;
-      for (const e of group.entries) {
-        const base = [
-          csvEscape(e.entry.date), csvEscape(e.entry.time), csvEscape(e.gharName), csvEscape(e.gharCategory),
-          csvEscape(e.entry.nameOfSK), csvEscape(e.entry.shabad), csvEscape(e.entry.bani), csvEscape(e.entry.book),
-          csvEscape(e.pathiA), csvEscape(e.pathiB), csvEscape(e.pathiC),
-        ];
-        if (hasAnyBaalSatsang) base.push(csvEscape(e.pathiD));
-        rows.push(base.join(","));
-      }
+    // Export sorted by date
+    const sorted = [...schedule.entries].sort((a, b) => {
+      const dc = parseDateSortable(a.entry.date).localeCompare(parseDateSortable(b.entry.date));
+      if (dc !== 0) return dc;
+      return a.entry.time.localeCompare(b.entry.time);
+    });
+    for (const e of sorted) {
+      const base = [
+        csvEscape(e.entry.date), csvEscape(e.entry.time), csvEscape(e.gharName), csvEscape(e.gharCategory),
+        csvEscape(e.entry.nameOfSK), csvEscape(e.entry.shabad), csvEscape(e.entry.bani), csvEscape(e.entry.book),
+        csvEscape(e.pathiA), csvEscape(e.pathiB), csvEscape(e.pathiC),
+      ];
+      if (hasAnyBaalSatsang) base.push(csvEscape(e.pathiD));
+      rows.push(base.join(","));
     }
     const blob = new Blob([rows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -162,13 +214,76 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
     a.download = "satsang_schedule_with_pathis.csv";
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("CSV exported with all details");
-  }, [centerNames, groupedByCenter, hasAnyBaalSatsang]);
+    toast.success("CSV exported (sorted by date)");
+  }, [schedule.entries, hasAnyBaalSatsang]);
 
-  const uniquePlaces = useMemo(
-    () => centerNames.sort(),
-    [centerNames]
-  );
+  // ─── Reset expanded when switching views ───
+  const handleViewChange = useCallback((mode: string) => {
+    setViewMode(mode as ViewMode);
+    setExpandedKeys(new Set());
+    setShowAll(false);
+  }, []);
+
+  // ─── Render a single entry row ───
+  const renderEntryRow = (e: typeof schedule.entries[0], i: number, showPlace: boolean) => {
+    const isVCD = e.entry.nameOfSK === "VCD";
+    const isBaal = e.hasBaalSatsang;
+    return (
+      <TableRow
+        key={`${e.entry.date}-${e.gharName}-${i}`}
+        className={`
+          ${isVCD ? "opacity-60 bg-gray-50/50 dark:bg-gray-900/10" : ""}
+          ${isBaal && !isVCD ? "bg-purple-50/20 dark:bg-purple-950/10" : ""}
+        `}
+      >
+        <TableCell className="text-xs whitespace-nowrap py-2">
+          <span className="font-medium">{e.entry.date}</span>
+          <span className="text-muted-foreground text-[10px] ml-1">{e.entry.time}</span>
+        </TableCell>
+        {showPlace && (
+          <TableCell className="text-xs py-2">
+            <div className="flex items-center gap-1.5">
+              <Badge className={`${categoryColors[e.gharCategory] || ""} text-[9px] px-1 py-0 border-0 shrink-0`}>
+                {e.gharCategory}
+              </Badge>
+              <span className="truncate max-w-[100px]" title={e.gharName}>{e.gharName}</span>
+              {isBaal && <span className="text-[9px] text-purple-500">★</span>}
+            </div>
+          </TableCell>
+        )}
+        <TableCell className="text-xs py-2">
+          {isVCD ? (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-dashed border-gray-300 text-gray-500">
+              VCD
+            </Badge>
+          ) : (
+            <span className="font-medium truncate max-w-[80px] block" title={e.entry.nameOfSK}>
+              {e.entry.nameOfSK}
+            </span>
+          )}
+        </TableCell>
+        <TableCell className="text-xs py-2 hidden md:table-cell">
+          <span className="line-clamp-1 text-muted-foreground" title={e.entry.shabad}>
+            {e.entry.shabad || "—"}
+          </span>
+        </TableCell>
+        <TableCell className="text-center py-2">
+          {pathiBadge(e.pathiA, "A")}
+        </TableCell>
+        <TableCell className="text-center py-2">
+          {pathiBadge(e.pathiB, "B")}
+        </TableCell>
+        <TableCell className="text-center py-2">
+          {pathiBadge(e.pathiC, "C")}
+        </TableCell>
+        {hasAnyBaalSatsang && (
+          <TableCell className="text-center py-2">
+            {isBaal ? pathiBadge(e.pathiD, "D") : <span className="text-muted-foreground/30 text-xs">—</span>}
+          </TableCell>
+        )}
+      </TableRow>
+    );
+  };
 
   return (
     <Card className="overflow-hidden">
@@ -179,12 +294,39 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
               Complete Schedule
             </CardTitle>
             <Badge variant="secondary" className="text-xs font-normal shrink-0">
-              {schedule.entries.length} entries · {centerNames.length} centers
+              {schedule.entries.length} entries
             </Badge>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {/* View Mode Toggle */}
+            <div className="flex rounded-lg border overflow-hidden">
+              <button
+                onClick={() => handleViewChange("date")}
+                className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  viewMode === "date"
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                    : "bg-white dark:bg-gray-950 text-muted-foreground hover:bg-gray-50 dark:hover:bg-gray-900/30"
+                }`}
+              >
+                <Calendar className="h-3 w-3" />
+                By Date
+              </button>
+              <button
+                onClick={() => handleViewChange("center")}
+                className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors border-l ${
+                  viewMode === "center"
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                    : "bg-white dark:bg-gray-950 text-muted-foreground hover:bg-gray-50 dark:hover:bg-gray-900/30"
+                }`}
+              >
+                <MapPin className="h-3 w-3" />
+                By Center
+              </button>
+            </div>
+
+            {/* Filter */}
             <Select value={placeFilter} onValueChange={setPlaceFilter}>
-              <SelectTrigger className="h-8 w-[180px] text-xs">
+              <SelectTrigger className="h-8 w-[160px] text-xs">
                 <Filter className="h-3 w-3 mr-1.5 shrink-0" />
                 <SelectValue placeholder="Filter place" />
               </SelectTrigger>
@@ -195,24 +337,22 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Expand / Collapse */}
             <Button
               variant="outline"
               size="sm"
-              onClick={allExpanded ? collapseAll : expandAll}
+              onClick={isAllExpanded ? collapseAll : expandAll}
               className="text-xs gap-1"
             >
-              {allExpanded ? (
-                <>
-                  <ChevronRight className="h-3 w-3" />
-                  Collapse
-                </>
+              {isAllExpanded ? (
+                <><ChevronRight className="h-3 w-3" />Collapse</>
               ) : (
-                <>
-                  <ChevronDown className="h-3 w-3" />
-                  Expand All
-                </>
+                <><ChevronDown className="h-3 w-3" />Expand All</>
               )}
             </Button>
+
+            {/* CSV Export */}
             <Button variant="outline" size="sm" onClick={exportCSV} className="text-xs gap-1.5">
               <Download className="h-3.5 w-3.5" />
               CSV
@@ -221,21 +361,115 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {/* Native scrollable container for the full schedule */}
         <div className="scrollable-panel max-h-[700px]">
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {filteredCenters.map((centerName) => {
+
+            {/* ────── DATE VIEW ────── */}
+            {viewMode === "date" && dateKeys.map((dateStr) => {
+              const entries = groupedByDate.get(dateStr)!;
+              const isExpanded = expandedSet.has(dateStr);
+              const liveCount = entries.filter((e) => e.entry.nameOfSK !== "VCD").length;
+              const vcdCount = entries.length - liveCount;
+              const centerCount = new Set(entries.map((e) => e.gharName)).size;
+
+              return (
+                <div key={dateStr} className="w-full">
+                  <button
+                    onClick={() => toggleKey(dateStr)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                        <Calendar className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold text-foreground">{dateStr}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0 ml-2">
+                      <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span>{entries.length} sessions</span>
+                        <span className="text-blue-600">{centerCount} centers</span>
+                        <span className="text-emerald-600">{liveCount} live</span>
+                        {vcdCount > 0 && <span className="text-purple-600">{vcdCount} VCD</span>}
+                      </div>
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-4 pb-4">
+                      <div className="rounded-lg border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-gray-50 dark:bg-gray-900/40">
+                              <TableHead className="text-xs">Date</TableHead>
+                              <TableHead className="text-xs">Place</TableHead>
+                              <TableHead className="text-xs">SK</TableHead>
+                              <TableHead className="text-xs hidden md:table-cell">Shabad</TableHead>
+                              <TableHead className="text-xs text-center">
+                                <span className="text-sky-600 font-semibold">A</span>
+                              </TableHead>
+                              <TableHead className="text-xs text-center">
+                                <span className="text-emerald-600 font-semibold">B</span>
+                              </TableHead>
+                              <TableHead className="text-xs text-center">
+                                <span className="text-amber-600 font-semibold">C</span>
+                              </TableHead>
+                              {hasAnyBaalSatsang && (
+                                <TableHead className="text-xs text-center">
+                                  <span className="text-purple-600 font-semibold">D</span>
+                                </TableHead>
+                              )}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {entries.map((e, i) => renderEntryRow(e, i, true))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 px-1">
+                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                          <Badge variant="outline" className={`text-[8px] px-1 py-0 ${slotColors.A}`}>A</Badge>
+                          Live
+                        </div>
+                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                          <Badge variant="outline" className={`text-[8px] px-1 py-0 ${slotColors.B}`}>B</Badge>
+                          Pathi-B
+                        </div>
+                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                          <Badge variant="outline" className={`text-[8px] px-1 py-0 ${slotColors.C}`}>C</Badge>
+                          Pathi-C
+                        </div>
+                        {hasAnyBaalSatsang && (
+                          <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                            <Badge variant="outline" className={`text-[8px] px-1 py-0 ${slotColors.D}`}>D</Badge>
+                            Baal
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* ────── CENTER VIEW ────── */}
+            {viewMode === "center" && centerNames.map((centerName) => {
               const group = groupedByCenter.get(centerName)!;
-              const isExpanded = visibleExpandedCenters.has(centerName);
+              const isExpanded = expandedSet.has(centerName);
               const liveCount = group.entries.filter((e) => e.entry.nameOfSK !== "VCD").length;
               const vcdCount = group.entries.length - liveCount;
               const baalCount = group.entries.filter((e) => e.hasBaalSatsang).length;
 
               return (
                 <div key={centerName} className="w-full">
-                  {/* Center header - clickable to expand/collapse */}
                   <button
-                    onClick={() => toggleCenter(centerName)}
+                    onClick={() => toggleKey(centerName)}
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors text-left"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -263,7 +497,6 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
                     </div>
                   </button>
 
-                  {/* Expanded entries table for this center */}
                   {isExpanded && (
                     <div className="px-4 pb-4">
                       <div className="rounded-lg border overflow-hidden">
@@ -290,59 +523,10 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {group.entries.map((e, i) => {
-                              const isVCD = e.entry.nameOfSK === "VCD";
-                              const isBaal = e.hasBaalSatsang;
-                              return (
-                                <TableRow
-                                  key={`${e.entry.date}-${i}`}
-                                  className={`
-                                    ${isVCD ? "opacity-60 bg-gray-50/50 dark:bg-gray-900/10" : ""}
-                                    ${isBaal && !isVCD ? "bg-purple-50/20 dark:bg-purple-950/10" : ""}
-                                  `}
-                                >
-                                  <TableCell className="text-xs whitespace-nowrap py-2">
-                                    <span className="font-medium">{e.entry.date}</span>
-                                    <span className="text-muted-foreground text-[10px] ml-1">{e.entry.time}</span>
-                                  </TableCell>
-                                  <TableCell className="text-xs py-2">
-                                    {isVCD ? (
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-dashed border-gray-300 text-gray-500">
-                                        VCD
-                                      </Badge>
-                                    ) : (
-                                      <span className="font-medium truncate max-w-[80px] block" title={e.entry.nameOfSK}>
-                                        {e.entry.nameOfSK}
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="text-xs py-2 hidden md:table-cell">
-                                    <span className="line-clamp-1 text-muted-foreground" title={e.entry.shabad}>
-                                      {e.entry.shabad || "—"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="text-center py-2">
-                                    {pathiBadge(e.pathiA, "A")}
-                                  </TableCell>
-                                  <TableCell className="text-center py-2">
-                                    {pathiBadge(e.pathiB, "B")}
-                                  </TableCell>
-                                  <TableCell className="text-center py-2">
-                                    {pathiBadge(e.pathiC, "C")}
-                                  </TableCell>
-                                  {hasAnyBaalSatsang && (
-                                    <TableCell className="text-center py-2">
-                                      {isBaal ? pathiBadge(e.pathiD, "D") : <span className="text-muted-foreground/30 text-xs">—</span>}
-                                    </TableCell>
-                                  )}
-                                </TableRow>
-                              );
-                            })}
+                            {group.entries.map((e, i) => renderEntryRow(e, i, false))}
                           </TableBody>
                         </Table>
                       </div>
-
-                      {/* Slot legend */}
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 px-1">
                         <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
                           <Badge variant="outline" className={`text-[8px] px-1 py-0 ${slotColors.A}`}>A</Badge>
@@ -368,6 +552,7 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
                 </div>
               );
             })}
+
           </div>
         </div>
       </CardContent>
