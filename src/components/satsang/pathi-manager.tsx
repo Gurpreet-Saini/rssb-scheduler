@@ -101,8 +101,11 @@ export function PathiManager({
   }
   const maxGharsPerDate = Math.max(...Object.values(dateGharCount), 0);
   const maxLivePerDate = Math.max(...Object.values(dateLiveCount), 0);
-  const minPathis = maxGharsPerDate;
-  const recommendedPathis = minPathis + 2;
+  // Per-ghar constraint: each ghar needs 3 (live) or 4 (live+baal) unique pathis per date
+  const hasAnyBaal = baalSatsangGhars.length > 0;
+  const slotsPerGhar = hasAnyBaal ? 4 : 3;
+  const minPathis = slotsPerGhar;
+  const recommendedPathis = Math.max(minPathis + 2, maxGharsPerDate + 1);
   const isInsufficient = pathis.length > 0 && pathis.length < minPathis;
   const isBelowRecommended = pathis.length >= minPathis && pathis.length < recommendedPathis;
 
@@ -126,7 +129,7 @@ export function PathiManager({
             </p>
             <p className="text-xs text-rose-600 dark:text-rose-400 leading-relaxed">
               You have <strong>{pathis.length}</strong> pathi{pathis.length > 1 ? "s" : ""} but need at least{" "}
-              <strong>{minPathis}</strong>. On the busiest date, {maxGharsPerDate} ghars run simultaneously — each needs a separate pathi for every slot (A, B, C). Please add{" "}
+              <strong>{minPathis}</strong>. Each ghar needs {slotsPerGhar} different pathis per date (for slots B, C, A{hasAnyBaal ? ", D" : ""}) — the same person cannot fill two slots at the same place. Please add{" "}
               <strong>{minPathis - pathis.length} more</strong> pathi{minPathis - pathis.length > 1 ? "s" : ""} to generate the schedule.
             </p>
           </div>
@@ -144,7 +147,7 @@ export function PathiManager({
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
               You have <strong>{pathis.length}</strong> pathis. Recommended:{" "}
-              <strong>{recommendedPathis}+</strong> for perfectly equal distribution across Pathi A, B, and C slots. The schedule will generate but some pathis may get more assignments than others.
+              <strong>{recommendedPathis}+</strong> for well-balanced distribution. With fewer pathis, the same person may appear at multiple ghars on the same date.
             </p>
           </div>
         </div>
@@ -188,7 +191,7 @@ export function PathiManager({
                   <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
                   <p>No pathis added yet</p>
                   <p className="text-xs mt-1">
-                    Minimum required: {minPathis} (one per ghar per date)
+                    Minimum required: {minPathis} (unique pathis per ghar)
                   </p>
                 </div>
               ) : (
@@ -345,7 +348,7 @@ export function PathiManager({
             </Button>
             {!isInsufficient && pathis.length === 0 && (
               <p className="text-xs text-center text-muted-foreground">
-                Add at least <strong>{minPathis}</strong> pathis to generate (one per ghar per date)
+                Add at least <strong>{minPathis}</strong> pathis to generate ({slotsPerGhar} unique per ghar)
               </p>
             )}
           </CardContent>

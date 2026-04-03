@@ -206,3 +206,25 @@ Stage Summary:
 - Each collapsible section shows all entries for one center, sorted by date
 - Date range displayed in center header (e.g., "03-May → 31-May")
 - Build passes successfully
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: Fix critical bug — same pathi assigned to both Pathi-B and Pathi-C at same place on same date
+
+Work Log:
+- Analyzed user's screenshot using VLM — confirmed nearly every row had identical Pathi-B and Pathi-C values
+- Root cause: pathi-engine.ts used per-slot booking (bookedSlot["A"], bookedSlot["B"], bookedSlot["C"]) which tracked each slot independently. This meant a pathi booked for Slot-B at Place-1 was NOT excluded when picking Slot-C at Place-1 on the same date.
+- Fixed pathi-engine.ts: Changed from per-slot booking to per-place-per-date booking (bookedPerGhar). Now when assigning any slot (A, B, C, D) for a ghar on a date, the pathi is added to a shared bookedPerGhar[gharName] set. Subsequent slot assignments at the same ghar on the same date will exclude all already-assigned pathis.
+- Updated calculateMinPathis(): Changed minimum from maxGharsPerDate to slotsPerGhar (3 for live, 4 with Baal Satsang), since per-ghar constraint only needs 3-4 unique pathis per ghar per date. Updated recommended to max(min+2, maxGharsPerDate+1).
+- Updated API route error messages to explain per-ghar constraint clearly
+- Updated PathiManager: minimum pathis display now shows "unique pathis per ghar", error/warning messages updated
+- Added conflict detection in calculateMetrics() that logs to console.error if any same-ghar same-date slot conflicts are found (safety check)
+- Build passes successfully
+
+Stage Summary:
+- Core bug fixed: per-ghar booking ensures same pathi cannot fill both Slot-B and Slot-C (or any two slots) at the same place on the same date
+- Cross-place still allowed: same pathi CAN do Slot-B at Place-1 and Slot-C at Place-2 on same date
+- Minimum pathis reduced to 3 (or 4 with Baal) from previous maxGharsPerDate
+- Conflict detection logging added for safety verification
+- Build passes successfully

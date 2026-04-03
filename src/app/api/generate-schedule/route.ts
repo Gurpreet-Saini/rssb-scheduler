@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `Insufficient pathis! You have ${uniquePathis.length} pathis but need at least ${validation.minimum}. On the busiest date, ${validation.maxPerDate} ghars run simultaneously — each needs a separate pathi per slot. Please add at least ${validation.minimum - uniquePathis.length} more pathi${validation.minimum - uniquePathis.length > 1 ? "s" : ""} before generating.`,
+          error: `Insufficient pathis! You have ${uniquePathis.length} pathis but need at least ${validation.minimum}. Each ghar needs ${validation.minimum} different pathis per date (for Pathi A, B, C${baalSatsangGhars.length > 0 ? ", D" : ""} slots — same pathi cannot fill two slots at the same place). Please add at least ${validation.minimum - uniquePathis.length} more pathi${validation.minimum - uniquePathis.length > 1 ? "s" : ""} before generating.`,
           validation,
         },
         { status: 400 }
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Check if pathis are fewer than recommended
     let warning: string | undefined;
     if (uniquePathis.length < validation.recommended) {
-      warning = `You have ${uniquePathis.length} pathis. Recommended: ${validation.recommended}+ for perfectly balanced distribution across Pathi A, B, and C slots. Some pathis may get slightly more assignments.`;
+      warning = `You have ${uniquePathis.length} pathis. Recommended: ${validation.recommended}+ for well-balanced distribution. With fewer pathis, the same person may appear at multiple ghars on the same date.`;
     }
 
     const generated = assignPathis(scheduleData, {
