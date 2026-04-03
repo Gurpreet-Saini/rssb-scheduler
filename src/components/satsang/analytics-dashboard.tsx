@@ -146,7 +146,9 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
             Pathi Slot Distribution
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="p-0">
+          <ScrollArea className="max-h-[500px]">
+            <div className="space-y-3 p-6">
           {metrics.slotMetrics
             .filter((s) => s.slot !== "D" || hasAnyBaalSatsang)
             .map((slot) => {
@@ -212,6 +214,8 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
                 </div>
               );
             })}
+            </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
