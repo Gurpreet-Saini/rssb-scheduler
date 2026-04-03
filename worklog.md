@@ -38,3 +38,71 @@ Work Log:
 Stage Summary:
 - Complete Next.js web app for Excel upload and schedule extraction
 - Preview URL: https://preview-chat-fd6634eb-9b4e-4061-a58f-df7638ce26ba.space.z.ai/
+---
+Task ID: 3
+Agent: Main Agent
+Task: Build unified Satsang Schedule Management System with pathi assignment engine
+
+Work Log:
+- Created `src/lib/types.ts` — Unified TypeScript type definitions for the entire system including PathiConfig, AssignedScheduleEntry, SlotMetrics, PathiSlotInfo, SKDistribution, PathiMetrics, GharAssignmentSummary, GeneratedSchedule, and API request/response types
+- Created `src/lib/pathi-engine.ts` — Core pathi assignment algorithm implementing:
+  - Date-by-date processing to prevent same-date double-booking
+  - Load balancing via least-assigned pathi selection with random tie-breaking
+  - VCD handling (Pathi-A = "N/A", still assigns Pathi-B and Pathi-C)
+  - Baal Satsang support (Pathi-D slot for enabled ghars)
+  - Comprehensive metrics calculation (per-slot distribution, SK distribution, ghar summaries)
+  - Standard deviation calculation for balance indicators
+- Created `src/app/api/generate-schedule/route.ts` — POST API endpoint that validates input, deduplicates pathis, runs the engine, and returns generated schedule with metrics
+- Created `src/components/satsang/step-indicator.tsx` — 3-step horizontal progress bar with Upload/Configure/Generate steps, amber/emerald color coding, connector lines, and checkmark for completed steps
+- Created `src/components/satsang/pathi-manager.tsx` — Two-panel configuration component:
+  - Left panel: Pathi list management (add/remove with input field, slot count calculations)
+  - Right panel: Baal Satsang toggles per Satsang Ghar with purple highlighting, generate button
+- Created `src/components/satsang/schedule-table.tsx` — Full sortable/filterable schedule table:
+  - Columns: Date, Place, SK, Shabad, Pathi-A/B/C/D
+  - Sortable by date, place, and each pathi column
+  - Filterable by Satsang Ghar via dropdown
+  - Color-coded: VCD rows dimmed, Baal Satsang rows purple-tinted, N/A in gray italic
+  - CSV export with dynamic column inclusion based on Baal Satsang presence
+  - Legend showing visual indicators
+- Created `src/components/satsang/analytics-dashboard.tsx` — Comprehensive analytics:
+  - Top stats cards (Total Programs, Live Sessions, VCD Sessions, Pathis count)
+  - SK Distribution table with live/VCD/total breakdown
+  - Pathi Load Distribution with mini bar charts per slot and balance indicators (green/amber/red)
+  - Per-Pathi Summary table showing slot-by-slot assignment counts
+  - Satsang Ghar Summary cards grid
+- Rewrote `src/app/page.tsx` — 3-step wizard flow:
+  - Step 1: Upload Excel file, preview extracted data with SummaryCards and SatsangGharCards
+  - Step 2: Configure pathis and Baal Satsang, then generate
+  - Step 3: View generated schedule table + analytics dashboard
+  - Sticky header with app title, step indicator always visible, navigation buttons
+- Fixed ESLint error: moved SortIcon component outside parent component definition
+- Lint passes clean, dev server compiles successfully
+
+Stage Summary:
+- Complete unified Satsang Schedule Management System with Excel upload → Pathi configuration → Schedule generation workflow
+- All 8 files created/rewritten successfully
+- Pathi engine handles all business rules: VCD N/A, Baal Satsang Pathi-D, load balancing, conflict prevention
+- Clean warm color scheme (amber primary, emerald success, rose alerts, purple for Baal Satsang)
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix UI for generate schedule, add pathi insufficiency errors, ensure equal distribution
+
+Work Log:
+- Identified root cause: bookedOnDate set was shared across ALL slots, blocking a pathi from different slots on the same date — preventing equal distribution
+- Rewrote pathi-engine.ts with per-slot booking (bookedSlot["A"], bookedSlot["B"], etc.) — each slot tracks independently
+- Added calculateMinPathis() function to compute minimum/recommended pathis needed
+- Updated API route with validation: blocks if pathis < minimum (400), warns if < recommended
+- Rewrote pathi-manager.tsx: red error banner for insufficient, amber warning for below recommended, slot requirements panel
+- Rewrote schedule-table.tsx: color-coded pathi badges per slot (A=sky, B=emerald, C=amber, D=purple), includes bani/book in CSV export
+- Rewrote analytics-dashboard.tsx: distribution quality banner, per-slot bar charts with counts, color-coded per-pathi summary
+- Updated page.tsx: Regenerate button, Edit Config navigation, warning display, proper header controls
+
+Stage Summary:
+- Equal distribution verified: with 6 pathis, range is only 1 per slot (e.g., Slot-A: 8-9, Slot-B: 10-11)
+- Per-pathi totals: 34-35 total (very balanced)
+- Zero same-slot conflicts
+- Insufficient pathis (< 5): returns clear error with minimum count
+- Below recommended (< 7): returns warning but still generates
+- ESLint passes clean, dev server compiles
