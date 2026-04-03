@@ -117,32 +117,35 @@ export function PathiManager({
     <div className="space-y-4">
       {/* Validation warnings */}
       {isInsufficient && (
-        <div className="flex items-start gap-3 rounded-lg border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/20 p-4">
-          <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">
-              Insufficient Pathis — Cannot Generate
+        <div className="flex items-start gap-3 rounded-xl border-2 border-rose-300 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/20 p-4 shadow-sm">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40">
+            <AlertTriangle className="h-4.5 w-4.5 text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-sm font-bold text-rose-700 dark:text-rose-300">
+              Cannot Generate — Insufficient Pathis
             </p>
-            <p className="text-xs text-rose-600 dark:text-rose-400">
-              You have <strong>{pathis.length}</strong> pathis but need at least{" "}
-              <strong>{minPathis}</strong> (one per Satsang Ghar per date). There are{" "}
-              {maxGharsPerDate} ghars active on each date. Please add at least{" "}
-              {minPathis - pathis.length} more pathi{minPathis - pathis.length > 1 ? "s" : ""}.
+            <p className="text-xs text-rose-600 dark:text-rose-400 leading-relaxed">
+              You have <strong>{pathis.length}</strong> pathi{pathis.length > 1 ? "s" : ""} but need at least{" "}
+              <strong>{minPathis}</strong>. On the busiest date, {maxGharsPerDate} ghars run simultaneously — each needs a separate pathi for every slot (A, B, C). Please add{" "}
+              <strong>{minPathis - pathis.length} more</strong> pathi{minPathis - pathis.length > 1 ? "s" : ""} to generate the schedule.
             </p>
           </div>
         </div>
       )}
 
       {isBelowRecommended && !isInsufficient && (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-4">
-          <Info className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
-              Fewer Than Recommended Pathis
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-4">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+            <Info className="h-4.5 w-4.5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+              Uneven Distribution Warning
             </p>
-            <p className="text-xs text-amber-600 dark:text-amber-400">
+            <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
               You have <strong>{pathis.length}</strong> pathis. Recommended:{" "}
-              <strong>{recommendedPathis}+</strong> for balanced distribution. The schedule will be generated but some pathis may get significantly more assignments.
+              <strong>{recommendedPathis}+</strong> for perfectly equal distribution across Pathi A, B, and C slots. The schedule will generate but some pathis may get more assignments than others.
             </p>
           </div>
         </div>
@@ -314,13 +317,23 @@ export function PathiManager({
             <Button
               onClick={onGenerate}
               disabled={isInsufficient || isGenerating || pathis.length === 0}
-              className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+              className={`w-full gap-2 font-medium ${isInsufficient ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}
               size="lg"
             >
               {isGenerating ? (
                 <>
                   <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   Generating...
+                </>
+              ) : isInsufficient ? (
+                <>
+                  <AlertTriangle className="h-4 w-4" />
+                  Cannot Generate — Need {minPathis} Pathis
+                </>
+              ) : pathis.length === 0 ? (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Add Pathis to Generate
                 </>
               ) : (
                 <>
@@ -329,14 +342,9 @@ export function PathiManager({
                 </>
               )}
             </Button>
-            {pathis.length === 0 && (
-              <p className="text-xs text-center text-rose-500">
-                Add at least {minPathis} pathis to generate
-              </p>
-            )}
-            {isInsufficient && (
-              <p className="text-xs text-center text-rose-500">
-                Add {minPathis - pathis.length} more pathi{minPathis - pathis.length > 1 ? "s" : ""} (minimum {minPathis})
+            {!isInsufficient && pathis.length === 0 && (
+              <p className="text-xs text-center text-muted-foreground">
+                Add at least <strong>{minPathis}</strong> pathis to generate (one per ghar per date)
               </p>
             )}
           </CardContent>

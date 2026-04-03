@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `Insufficient pathis. You need at least ${validation.minimum} pathis (you have ${uniquePathis.length}). ${validation.details}`,
+          error: `Insufficient pathis! You have ${uniquePathis.length} pathis but need at least ${validation.minimum}. On the busiest date, ${validation.maxPerDate} ghars run simultaneously — each needs a separate pathi per slot. Please add at least ${validation.minimum - uniquePathis.length} more pathi${validation.minimum - uniquePathis.length > 1 ? "s" : ""} before generating.`,
           validation,
         },
         { status: 400 }
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Check if pathis are fewer than recommended
     let warning: string | undefined;
     if (uniquePathis.length < validation.recommended) {
-      warning = `You have ${uniquePathis.length} pathis. Recommended: ${validation.recommended}+ for balanced distribution. With fewer pathis, some may get significantly more assignments than others.`;
+      warning = `You have ${uniquePathis.length} pathis. Recommended: ${validation.recommended}+ for perfectly balanced distribution across Pathi A, B, and C slots. Some pathis may get slightly more assignments.`;
     }
 
     const generated = assignPathis(scheduleData, {

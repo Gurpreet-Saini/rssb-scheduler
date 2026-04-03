@@ -28,7 +28,7 @@ const steps = [
 
 export function StepIndicator({ currentStep }: StepIndicatorProps) {
   return (
-    <div className="w-full">
+    <div className="w-full mb-2">
       <div className="flex items-center justify-between max-w-2xl mx-auto">
         {steps.map((s, index) => {
           const isCompleted = currentStep > s.step;
@@ -73,7 +73,7 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
               {index < steps.length - 1 && (
                 <div
                   className={cn(
-                    "flex-1 h-0.5 mx-3 mt-[-20px] transition-all duration-300",
+                    "flex-1 h-0.5 mx-2 sm:mx-3 mt-[-16px] sm:mt-[-20px] transition-all duration-300",
                     currentStep > s.step
                       ? "bg-emerald-500"
                       : "bg-gray-200 dark:bg-gray-800"

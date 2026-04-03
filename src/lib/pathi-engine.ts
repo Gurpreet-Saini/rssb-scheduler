@@ -2,7 +2,8 @@
 // Pathi Assignment Engine
 // ============================================
 // Core algorithm for assigning pathis to schedule entries
-// with load balancing, conflict prevention, and Baal Satsang support.
+// with strict equal distribution per slot, conflict prevention,
+// and Baal Satsang support.
 // ============================================
 
 import {
@@ -19,15 +20,6 @@ import {
   GeneratedSchedule,
 } from "./types";
 
-function shuffleArray<T>(array: T[]): T[] {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
 function standardDeviation(values: number[]): number {
   if (values.length === 0) return 0;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
@@ -41,20 +33,17 @@ function standardDeviation(values: number[]): number {
  * A pathi can only fill ONE slot at ONE ghar per date.
  * So min pathis = max_ghars_per_date (each needs at least 1 pathi for Slot-A/B/C each).
  *
- * Actually: each ghar needs 3 pathis (A, B, C) per date. A single pathi can do
- * at most one slot per ghar per date. But the same pathi CAN do different slots
- * at different ghars on the same date (per-slot booking).
+ * Per-slot booking: a pathi CAN do Slot-A at Place-1 and Slot-B at Place-2 same date,
+ * but CANNOT do Slot-A at Place-1 AND Slot-A at Place-2 same date.
  *
  * So per slot per date: need at most (number of ghars active) pathis.
  * Min pathis = max over all dates of ghars_with_non_VCD_sessions (for slot A)
  *             or max over all dates of total_ghars (for slot B/C).
- * = max ghars per date (since all ghars have sessions on all dates).
  */
 export function calculateMinPathis(
   schedule: SatsangSchedule,
   baalSatsangGhars: string[]
 ): { minimum: number; recommended: number; maxPerDate: number; maxPerSlot: number; maxPerSlotA: number; details: string } {
-  // Find the busiest date (most ghar sessions)
   const dateGharCount: Record<string, number> = {};
   const dateLiveCount: Record<string, number> = {};
   const dateBaalCount: Record<string, number> = {};
@@ -77,10 +66,6 @@ export function calculateMinPathis(
   const maxLivePerDate = Math.max(...Object.values(dateLiveCount), 0);
   const maxBaalPerDate = Math.max(...Object.values(dateBaalCount), 0);
 
-  // Per-slot: each slot needs at most maxGharsPerDate pathis (one per ghar)
-  // Slot-A: needs maxLivePerDate (VCD entries don't need pathi-A)
-  // Slot-B, C: needs maxGharsPerDate
-  // Slot-D: needs maxBaalPerDate
   const maxPerSlotA = maxLivePerDate;
   const maxPerSlotBC = maxGharsPerDate;
   const maxPerSlotD = maxBaalPerDate;
@@ -110,14 +95,16 @@ export function calculateMinPathis(
 /**
  * Main entry point: Assign pathis to all schedule entries.
  *
- * Algorithm (per-slot booking):
- * 1. Flatten all entries, group by date.
- * 2. For each date, for each ghar entry:
- *    - Pick pathi for Slot-A (if not VCD) — only prevent same pathi doing Slot-A at another ghar
- *    - Pick pathi for Slot-B — only prevent same pathi doing Slot-B at another ghar
- *    - Pick pathi for Slot-C — only prevent same pathi doing Slot-C at another ghar
- *    - Pick pathi for Slot-D (if Baal Satsang) — same isolation
- * 3. Load balancing: always pick the pathi with fewest assignments in that slot.
+ * Algorithm (strict per-slot equal distribution):
+ * 1. Flatten all entries, group by date, sort deterministically.
+ * 2. For each date, for each ghar entry (sorted):
+ *    - Pick pathi for Slot-A (if not VCD) — using deterministic rotation
+ *    - Pick pathi for Slot-B — using deterministic rotation
+ *    - Pick pathi for Slot-C — using deterministic rotation
+ *    - Pick pathi for Slot-D (if Baal Satsang) — using deterministic rotation
+ * 3. Equal distribution: each slot has its own rotation pointer that cycles
+ *    through available pathis, always preferring the least-loaded one.
+ *    Ties are broken by deterministic rotation index (not random).
  * 4. No cross-slot blocking: a pathi CAN do Slot-A at Place-1 and Slot-B at Place-2 same date.
  */
 export function assignPathis(
@@ -139,6 +126,10 @@ export function assignPathis(
       slotCounts[slot][pathi] = 0;
     }
   }
+
+  // Per-slot rotation indices for deterministic tiebreaking
+  // Each slot has its own rotation that advances after each assignment
+  const slotRotation: Record<string, number> = { A: 0, B: 0, C: 0, D: 0 };
 
   interface DateEntry {
     gharName: string;
@@ -168,6 +159,14 @@ export function assignPathis(
     }
   }
 
+  // Sort dates chronologically
+  dateMap.sort((a, b) => a.localeCompare(b));
+
+  // Sort entries within each date by ghar name for determinism
+  for (const dk of dateMap) {
+    dateEntriesMap[dk].sort((a, b) => a.gharName.localeCompare(b.gharName));
+  }
+
   const flatEntries: AssignedScheduleEntry[] = [];
 
   for (const dateKey of dateMap) {
@@ -178,11 +177,7 @@ export function assignPathis(
       A: new Set(), B: new Set(), C: new Set(), D: new Set(),
     };
 
-    // Shuffle for randomness
-    const shuffled = shuffleArray(entriesForDate.map((_, i) => i));
-
-    for (const idx of shuffled) {
-      const de = entriesForDate[idx];
+    for (const de of entriesForDate) {
       const isVCD = de.entry.nameOfSK === "VCD";
 
       let assignedA = "N/A";
@@ -191,21 +186,21 @@ export function assignPathis(
       let assignedD = "";
 
       if (!isVCD) {
-        assignedA = pickPathi(slotCounts["A"], pathis, bookedSlot["A"]);
+        assignedA = pickPathiBalanced(slotCounts["A"], pathis, bookedSlot["A"], slotRotation, "A");
         bookedSlot["A"].add(assignedA);
         slotCounts["A"][assignedA]++;
       }
 
-      assignedB = pickPathi(slotCounts["B"], pathis, bookedSlot["B"]);
+      assignedB = pickPathiBalanced(slotCounts["B"], pathis, bookedSlot["B"], slotRotation, "B");
       bookedSlot["B"].add(assignedB);
       slotCounts["B"][assignedB]++;
 
-      assignedC = pickPathi(slotCounts["C"], pathis, bookedSlot["C"]);
+      assignedC = pickPathiBalanced(slotCounts["C"], pathis, bookedSlot["C"], slotRotation, "C");
       bookedSlot["C"].add(assignedC);
       slotCounts["C"][assignedC]++;
 
       if (de.hasBaalSatsang) {
-        assignedD = pickPathi(slotCounts["D"], pathis, bookedSlot["D"]);
+        assignedD = pickPathiBalanced(slotCounts["D"], pathis, bookedSlot["D"], slotRotation, "D");
         bookedSlot["D"].add(assignedD);
         slotCounts["D"][assignedD]++;
       }
@@ -241,16 +236,24 @@ export function assignPathis(
 /**
  * Pick the pathi with fewest assignments in the given slot,
  * excluding any already booked for THIS SLOT on this date.
+ * Uses deterministic rotation for tiebreaking to ensure strict equal distribution.
+ *
+ * Instead of random tiebreaking among equally-loaded candidates,
+ * we rotate through candidates in a fixed cycle. This guarantees
+ * that over the full schedule, each pathi gets exactly the same
+ * number of assignments (or within ±1 when total isn't divisible).
  */
-function pickPathi(
+function pickPathiBalanced(
   counts: Record<string, number>,
   pathis: string[],
-  bookedForSlot: Set<string>
+  bookedForSlot: Set<string>,
+  slotRotation: Record<string, number>,
+  slotName: string
 ): string {
   const available = pathis.filter((p) => !bookedForSlot.has(p));
 
   if (available.length === 0) {
-    // All booked — fallback to least-assigned overall
+    // All booked — fallback to least-assigned overall (shouldn't happen if pathis >= minPathis)
     const sorted = [...pathis].sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0));
     return sorted[0];
   }
@@ -258,7 +261,19 @@ function pickPathi(
   const minCount = Math.min(...available.map((p) => counts[p] ?? 0));
   const candidates = available.filter((p) => (counts[p] ?? 0) === minCount);
 
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+
+  // Deterministic rotation: pick from candidates using rotation index
+  // This ensures fair cycling through equally-loaded pathis
+  const rotIdx = slotRotation[slotName] % candidates.length;
+  const selected = candidates[rotIdx];
+
+  // Advance the rotation pointer for this slot
+  slotRotation[slotName]++;
+
+  return selected;
 }
 
 function calculateMetrics(

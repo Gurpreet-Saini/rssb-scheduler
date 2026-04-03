@@ -106,3 +106,27 @@ Stage Summary:
 - Insufficient pathis (< 5): returns clear error with minimum count
 - Below recommended (< 7): returns warning but still generates
 - ESLint passes clean, dev server compiles
+
+---
+Task ID: 1
+Agent: main
+Task: Fix UI overlapping, add insufficient pathis error, implement equal distribution for Pathi A/B/C
+
+Work Log:
+- Analyzed screenshot using VLM to identify overlapping UI elements
+- Fixed ScheduleTable component: restructured CardHeader layout from single flex-row to two separate rows (title+actions row, filter row) to prevent title overlapping with filter controls
+- Fixed AnalyticsDashboard: added relative z-index, changed banner layout to items-start for proper text alignment
+- Fixed StepIndicator: added bottom margin and responsive connector line positioning
+- Fixed Page Step 3 layout: changed header to flex-col/sm:flex-row for responsive behavior, increased spacing from space-y-4 to space-y-6
+- Enhanced insufficient pathis error in PathiManager: upgraded to larger, more prominent error card with icon circle, bold title, and detailed explanation
+- Improved generate button states: shows "Cannot Generate — Need X Pathis" when insufficient, "Add Pathis to Generate" when empty, with disabled gray styling
+- Enhanced API validation: more detailed error message explaining why X pathis are needed per date
+- Rewrote pathi-engine.ts: replaced random tiebreaking with deterministic per-slot rotation index, ensuring strict equal distribution across Pathi A, B, C slots
+- Removed random shuffling of entries — now uses deterministic sorted order for reproducible results
+- Extended toast duration for error messages to 6000ms
+
+Stage Summary:
+- UI overlapping fixed across ScheduleTable, AnalyticsDashboard, StepIndicator, and main page
+- Insufficient pathis validation is now prominently displayed with clear error messaging and disabled generate button
+- Equal distribution algorithm now uses deterministic rotation instead of random selection for tighter balance
+- Build passes successfully

@@ -71,7 +71,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative z-0">
       {/* Top Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -97,7 +97,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
       </div>
 
       {/* Distribution Quality Banner */}
-      <div className={`flex items-center gap-3 rounded-lg border p-3 ${
+      <div className={`flex items-start gap-3 rounded-lg border p-3 ${
         overallBalanced
           ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20"
           : "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20"

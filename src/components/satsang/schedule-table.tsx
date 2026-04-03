@@ -135,18 +135,26 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
   };
 
   return (
-    <Card>
+    <Card className="relative z-10">
       <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <CardTitle className="text-base font-semibold">
-            Complete Schedule
-            <Badge variant="secondary" className="ml-2 text-xs font-normal">
-              {sortedEntries.length} entries
-            </Badge>
-          </CardTitle>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold">
+              Complete Schedule
+              <Badge variant="secondary" className="ml-2 text-xs font-normal">
+                {sortedEntries.length} entries
+              </Badge>
+            </CardTitle>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={exportCSV} className="text-xs gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                CSV
+              </Button>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             <Select value={placeFilter} onValueChange={setPlaceFilter}>
-              <SelectTrigger className="h-8 w-[160px] text-xs">
+              <SelectTrigger className="h-8 w-[200px] text-xs">
                 <Filter className="h-3 w-3 mr-1.5 shrink-0" />
                 <SelectValue placeholder="Filter place" />
               </SelectTrigger>
@@ -157,10 +165,6 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" onClick={exportCSV} className="text-xs gap-1.5">
-              <Download className="h-3.5 w-3.5" />
-              CSV
-            </Button>
           </div>
         </div>
       </CardHeader>

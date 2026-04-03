@@ -69,15 +69,15 @@ export default function Home() {
       });
       const result = await response.json();
       if (!response.ok) {
-        toast.error(result.error || "Failed to generate schedule");
+        toast.error(result.error || "Failed to generate schedule", { duration: 6000 });
         return;
       }
       setGeneratedSchedule(result.data);
       if (result.warning) {
         setScheduleWarning(result.warning);
-        toast.warning("Schedule generated with variance — some pathis have more assignments.");
+        toast.warning("Schedule generated — some pathis have slightly more assignments.", { duration: 5000 });
       } else {
-        toast.success("Schedule generated with equal distribution!");
+        toast.success("Schedule generated with equal distribution across all slots!");
       }
       setCurrentStep(3);
     } catch {
@@ -263,15 +263,15 @@ export default function Home() {
 
         {/* Step 3 */}
         {currentStep === 3 && generatedSchedule && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between">
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold text-foreground">Generated Schedule</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   {generatedSchedule.config.pathis.length} pathis · {generatedSchedule.entries.length} entries
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <Button variant="outline" size="sm" onClick={handleBack} className="text-xs gap-1.5">
                   <ChevronLeft className="h-3.5 w-3.5" /> Edit Config
                 </Button>
