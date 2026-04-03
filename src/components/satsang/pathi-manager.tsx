@@ -151,9 +151,9 @@ export function PathiManager({
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid lg:grid-cols-2 gap-4">
         {/* Left: Pathi List */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <UserPlus className="h-4 w-4 text-amber-600" />
@@ -254,7 +254,7 @@ export function PathiManager({
         </Card>
 
         {/* Right: Baal Satsang Configuration */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-purple-600" />

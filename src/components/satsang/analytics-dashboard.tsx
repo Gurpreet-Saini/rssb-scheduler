@@ -28,7 +28,7 @@ function getBalanceStatus(stdDev: number, average: number): BalanceStatus {
 function BalanceIndicator({ stdDev, average }: { stdDev: number; average: number }) {
   const status = getBalanceStatus(stdDev, average);
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1.5">
       {status === "balanced" ? (
         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
       ) : status === "slightly_off" ? (
@@ -36,7 +36,7 @@ function BalanceIndicator({ stdDev, average }: { stdDev: number; average: number
       ) : (
         <AlertTriangle className="h-3.5 w-3.5 text-rose-500" />
       )}
-      <span className={`text-[10px] font-medium ${
+      <span className={`text-[11px] font-semibold ${
         status === "balanced" ? "text-emerald-600 dark:text-emerald-400"
         : status === "slightly_off" ? "text-amber-600 dark:text-amber-400"
         : "text-rose-600 dark:text-rose-400"
@@ -55,10 +55,24 @@ const slotLabelColors: Record<string, string> = {
 };
 
 const slotBarColors: Record<string, string> = {
-  A: "bg-sky-400 dark:bg-sky-600 hover:bg-sky-500",
-  B: "bg-emerald-400 dark:bg-emerald-600 hover:bg-emerald-500",
-  C: "bg-amber-400 dark:bg-amber-600 hover:bg-amber-500",
-  D: "bg-purple-400 dark:bg-purple-600 hover:bg-purple-500",
+  A: "bg-sky-400 dark:bg-sky-500",
+  B: "bg-emerald-400 dark:bg-emerald-500",
+  C: "bg-amber-400 dark:bg-amber-500",
+  D: "bg-purple-400 dark:bg-purple-500",
+};
+
+const slotBgColors: Record<string, string> = {
+  A: "bg-sky-50 dark:bg-sky-950/20",
+  B: "bg-emerald-50 dark:bg-emerald-950/20",
+  C: "bg-amber-50 dark:bg-amber-950/20",
+  D: "bg-purple-50 dark:bg-purple-950/20",
+};
+
+const slotBorderColors: Record<string, string> = {
+  A: "border-sky-200 dark:border-sky-800",
+  B: "border-emerald-200 dark:border-emerald-800",
+  C: "border-amber-200 dark:border-amber-800",
+  D: "border-purple-200 dark:border-purple-800",
 };
 
 export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
@@ -71,7 +85,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
   );
 
   return (
-    <div className="space-y-4 relative z-0">
+    <div className="space-y-4">
       {/* Top Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -80,13 +94,13 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
           { icon: Video, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-950/30", value: metrics.vcdSessions, label: "VCD Sessions" },
           { icon: Users, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30", value: schedule.config.pathis.length, label: "Pathis" },
         ].map((s) => (
-          <Card key={s.label}>
+          <Card key={s.label} className="overflow-hidden">
             <CardContent className="p-3">
               <div className="flex items-center gap-3">
                 <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${s.bg}`}>
                   <s.icon className={`h-4.5 w-4.5 ${s.color}`} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-xl font-bold leading-none">{s.value}</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">{s.label}</p>
                 </div>
@@ -103,11 +117,11 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
           : "border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20"
       }`}>
         {overallBalanced ? (
-          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
         ) : (
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
+          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
         )}
-        <div>
+        <div className="min-w-0">
           <p className={`text-sm font-semibold ${
             overallBalanced ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"
           }`}>
@@ -115,7 +129,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
               ? "Equal Distribution Achieved"
               : "Distribution Has Variance"}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Each pathi gets approximately equal assignments across all slots.
             {overallBalanced
               ? " All slots are balanced within tolerance."
@@ -124,85 +138,95 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {/* Per-Slot Distribution Detail */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-blue-600" />
-              Pathi Slot Distribution
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {metrics.slotMetrics
-              .filter((s) => s.slot !== "D" || hasAnyBaalSatsang)
-              .map((slot) => {
-                const counts = schedule.config.pathis.map((p) => slot.assignments[p] || 0);
-                const maxCount = Math.max(...counts, 1);
-                const minCount = Math.min(...counts);
-                const range = maxCount - minCount;
+      {/* Pathi Slot Distribution - Full Width */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-blue-600" />
+            Pathi Slot Distribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {metrics.slotMetrics
+            .filter((s) => s.slot !== "D" || hasAnyBaalSatsang)
+            .map((slot) => {
+              const counts = schedule.config.pathis.map((p) => slot.assignments[p] || 0);
+              const maxCount = Math.max(...counts, 1);
+              const minCount = Math.min(...counts);
+              const range = maxCount - minCount;
 
-                return (
-                  <div key={slot.slot} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge className={`${slotLabelColors[slot.slot]} text-[10px] px-1.5 py-0 border-0 font-bold`}>
-                          Slot-{slot.slot}
-                        </Badge>
-                        <span className="text-[10px] text-muted-foreground">
-                          {slot.total} total
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground">
-                          avg {slot.average.toFixed(1)} · range {range}
-                        </span>
-                        <BalanceIndicator stdDev={slot.stdDev} average={slot.average} />
-                      </div>
+              return (
+                <div
+                  key={slot.slot}
+                  className={`rounded-lg border p-3 space-y-2.5 ${slotBgColors[slot.slot]} ${slotBorderColors[slot.slot]}`}
+                >
+                  {/* Slot header row */}
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Badge className={`${slotLabelColors[slot.slot]} text-xs px-2 py-0.5 border-0 font-bold`}>
+                        Slot-{slot.slot}
+                      </Badge>
+                      <span className="text-xs font-medium text-muted-foreground">
+                        {slot.total} assignments
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        (avg {slot.average.toFixed(1)}/pathi · spread {range})
+                      </span>
                     </div>
-
-                    {/* Bar chart */}
-                    <div className="flex items-end gap-1.5 h-8">
-                      {schedule.config.pathis.map((pathi) => {
-                        const count = slot.assignments[pathi] || 0;
-                        const height = Math.max((count / maxCount) * 100, 6);
-                        return (
-                          <div
-                            key={pathi}
-                            className="flex-1 flex flex-col items-center gap-0.5"
-                            title={`${pathi}: ${count} assignments (Slot-${slot.slot})`}
-                          >
-                            <span className="text-[8px] font-medium text-muted-foreground">{count}</span>
-                            <div className="w-full rounded-sm transition-all hover:opacity-80" style={{ height: `${height}%` }}>
-                              <div className={`w-full h-full rounded-sm ${slotBarColors[slot.slot]}`} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex gap-1.5">
-                      {schedule.config.pathis.map((pathi) => (
-                        <div key={pathi} className="flex-1 text-center text-[8px] text-muted-foreground truncate" title={pathi}>
-                          {pathi.split(" ")[0]}
-                        </div>
-                      ))}
-                    </div>
+                    <BalanceIndicator stdDev={slot.stdDev} average={slot.average} />
                   </div>
-                );
-              })}
-          </CardContent>
-        </Card>
 
+                  {/* Bar chart with labels */}
+                  <div className="flex items-end gap-2">
+                    {schedule.config.pathis.map((pathi) => {
+                      const count = slot.assignments[pathi] || 0;
+                      const height = Math.max((count / maxCount) * 100, 8);
+                      return (
+                        <div
+                          key={`${slot.slot}-${pathi}`}
+                          className="flex-1 flex flex-col items-center gap-1"
+                          title={`${pathi}: ${count} assignments in Slot-${slot.slot}`}
+                        >
+                          <span className="text-[10px] font-bold text-foreground">{count}</span>
+                          <div
+                            className="w-full rounded-t-md transition-all duration-300 hover:opacity-80"
+                            style={{ height: `${Math.max(height, 10)}%`, minHeight: "4px" }}
+                          >
+                            <div className={`w-full h-full rounded-t-md ${slotBarColors[slot.slot]}`} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pathi names under bars */}
+                  <div className="flex gap-2">
+                    {schedule.config.pathis.map((pathi) => (
+                      <div key={pathi} className="flex-1 text-center">
+                        <span className="text-[9px] text-muted-foreground truncate block" title={pathi}>
+                          {pathi.length > 8 ? pathi.substring(0, 7) + "…" : pathi}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+        </CardContent>
+      </Card>
+
+      {/* Per-Pathi Summary + Ghar Summary row */}
+      <div className="grid lg:grid-cols-2 gap-4">
         {/* Per-Pathi Summary Table */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Users className="h-4 w-4 text-blue-600" />
               Per-Pathi Summary
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="max-h-[360px]">
+          <CardContent className="p-0">
+            <ScrollArea className="max-h-[320px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -229,27 +253,29 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
                     const totalPossible = metrics.slotMetrics.reduce((acc, s) => acc + s.total, 0);
                     const avgTotal = schedule.config.pathis.length > 0 ? totalPossible / schedule.config.pathis.length : 0;
                     const deviation = Math.abs(p.total - avgTotal);
-                    const isBalanced = deviation <= avgTotal * 0.15;
+                    const isBalanced = deviation <= avgTotal * 0.15 || avgTotal === 0;
 
                     return (
                       <TableRow key={p.pathiName}>
-                        <TableCell className="text-xs py-1.5 font-medium">{p.pathiName}</TableCell>
-                        <TableCell className="text-xs text-center py-1.5">
-                          <span className="text-sky-600">{p.slotA}</span>
+                        <TableCell className="text-xs py-1.5 font-medium max-w-[120px]">
+                          <span className="truncate block" title={p.pathiName}>{p.pathiName}</span>
                         </TableCell>
                         <TableCell className="text-xs text-center py-1.5">
-                          <span className="text-emerald-600">{p.slotB}</span>
+                          <span className="text-sky-600 font-medium">{p.slotA}</span>
                         </TableCell>
                         <TableCell className="text-xs text-center py-1.5">
-                          <span className="text-amber-600">{p.slotC}</span>
+                          <span className="text-emerald-600 font-medium">{p.slotB}</span>
+                        </TableCell>
+                        <TableCell className="text-xs text-center py-1.5">
+                          <span className="text-amber-600 font-medium">{p.slotC}</span>
                         </TableCell>
                         {hasAnyBaalSatsang && (
                           <TableCell className="text-xs text-center py-1.5">
-                            <span className="text-purple-600">{p.slotD}</span>
+                            <span className="text-purple-600 font-medium">{p.slotD}</span>
                           </TableCell>
                         )}
                         <TableCell className="text-xs text-center py-1.5">
-                          <Badge variant="secondary" className={`text-[10px] font-semibold ${
+                          <Badge variant="secondary" className={`text-[10px] font-bold ${
                             isBalanced
                               ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
                               : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
@@ -265,20 +291,17 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
             </ScrollArea>
           </CardContent>
         </Card>
-      </div>
 
-      {/* Bottom row: SK Distribution + Ghar Summary */}
-      <div className="grid md:grid-cols-2 gap-4">
         {/* SK Distribution */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
               <Star className="h-4 w-4 text-amber-600" />
               SK Distribution
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="max-h-[250px]">
+          <CardContent className="p-0">
+            <ScrollArea className="max-h-[320px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -295,7 +318,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
                         {sk.skName === "VCD" ? (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-dashed border-gray-300 text-gray-500">VCD</Badge>
                         ) : (
-                          <span className="font-medium">{sk.skName}</span>
+                          <span className="font-medium truncate block max-w-[120px]" title={sk.skName}>{sk.skName}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-center py-1.5">
@@ -312,44 +335,50 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
             </ScrollArea>
           </CardContent>
         </Card>
+      </div>
 
-        {/* Ghar Summary */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-emerald-600" />
-              Satsang Ghar Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
+      {/* Satsang Ghar Summary - Full Width */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-emerald-600" />
+            Satsang Ghar Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <ScrollArea className="max-h-[300px]">
+            <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {metrics.gharSummary.map((ghar) => (
                 <div
                   key={ghar.gharName}
-                  className={`flex items-center justify-between rounded-lg border p-2.5 ${
+                  className={`flex items-center justify-between px-4 py-2.5 transition-colors ${
                     ghar.hasBaalSatsang
-                      ? "border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-950/20"
-                      : "border-gray-200 dark:border-gray-800"
+                      ? "bg-purple-50/50 dark:bg-purple-950/10"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-900/20"
                   }`}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Badge className={`${categoryColors(ghar.gharCategory)} text-[9px] px-1 py-0 border-0 shrink-0`}>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Badge className={`${categoryColors(ghar.gharCategory)} text-[9px] px-1.5 py-0 border-0 shrink-0`}>
                       {ghar.gharCategory}
                     </Badge>
-                    <span className="text-xs font-medium truncate">{ghar.gharName}</span>
-                    {ghar.hasBaalSatsang && <span className="text-[9px] text-purple-500">★ BS</span>}
+                    <span className="text-xs font-medium truncate" title={ghar.gharName}>{ghar.gharName}</span>
+                    {ghar.hasBaalSatsang && (
+                      <Badge className="text-[8px] px-1 py-0 border-0 bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 shrink-0">
+                        Baal
+                      </Badge>
+                    )}
                   </div>
-                  <div className="flex items-center gap-3 text-[10px] text-muted-foreground shrink-0">
-                    <span>{ghar.totalEntries} total</span>
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground shrink-0 ml-2">
+                    <span className="font-medium text-foreground">{ghar.totalEntries}</span>
                     <span className="text-emerald-600">{ghar.liveEntries} live</span>
                     {ghar.vcdEntries > 0 && <span className="text-purple-600">{ghar.vcdEntries} VCD</span>}
                   </div>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
     </div>
   );
 }

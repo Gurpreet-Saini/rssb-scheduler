@@ -152,3 +152,34 @@ Stage Summary:
 - Rewrote step indicator with zero negative margins
 - Compacted header to fixed height to prevent layout shift
 - Build passes successfully
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Fix all UI overflow and overlapping issues across PathiManager, AnalyticsDashboard, and ScheduleTable
+
+Work Log:
+- Fixed PathiManager (pathi-manager.tsx): Added `overflow-hidden` to both Card components to prevent pathi entries from escaping the card boundary. Changed grid from `md:grid-cols-2` to `lg:grid-cols-2` for better spacing on medium screens.
+- Rewrote AnalyticsDashboard (analytics-dashboard.tsx):
+  - Improved Pathi Slot Distribution UI: redesigned as full-width card with colored bordered sections per slot, taller bars with rounded tops, larger count labels (10px bold), clearer stats (avg/spread), full pathi names with truncation, color-coded backgrounds per slot (sky/emerald/amber/purple)
+  - Fixed Per-Pathi Summary overflow: Added `overflow-hidden` to Card, moved `p-0` to CardContent, constrained pathi names to `max-w-[120px]` with truncation
+  - Fixed Satsang Ghar Summary overflow: Moved from a side-by-side grid card to full-width Card with ScrollArea (`max-h-[300px]`) and divide-y list layout with proper padding
+  - Changed Per-Pathi + SK Distribution grid from `md:grid-cols-2` to `lg:grid-cols-2`
+  - All Cards now have `overflow-hidden` class
+- Completely rewrote ScheduleTable (schedule-table.tsx) for center-grouped display:
+  - Entries grouped by Satsang Ghar (center) with collapsible sections
+  - Centers sorted by category (SP → SC → C) then alphabetically
+  - Each center shows: category badge, name, session count, expand/collapse chevron
+  - Expanded view: bordered table with all entries for that center only
+  - "Expand All" / "Collapse All" button
+  - Auto-expand when filtering to a specific center
+  - Filter dropdown, CSV export maintained
+  - Slot legend per expanded center
+  - No overlapping between center sections (divide-y separators)
+  - Removed flat table design in favor of grouped layout
+
+Stage Summary:
+- All UI overflow issues resolved: pathi entries contained, per-pathi summary contained, ghar summary contained
+- Pathi Slot Distribution UI significantly improved with color-coded sections and larger bars
+- ScheduleTable completely redesigned to center-grouped layout showing one center at a time without overlapping
+- Build passes successfully
