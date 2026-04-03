@@ -12,36 +12,39 @@ const steps = [
   {
     step: 1 as WizardStep,
     label: "Upload & Extract",
+    shortLabel: "Upload",
     icon: Upload,
   },
   {
     step: 2 as WizardStep,
     label: "Configure Pathis",
+    shortLabel: "Configure",
     icon: Users,
   },
   {
     step: 3 as WizardStep,
     label: "Generate Schedule",
+    shortLabel: "Generate",
     icon: CalendarCheck,
   },
 ];
 
 export function StepIndicator({ currentStep }: StepIndicatorProps) {
   return (
-    <div className="w-full mb-2">
-      <div className="flex items-center justify-between max-w-2xl mx-auto">
+    <div className="w-full">
+      <div className="flex items-start justify-between max-w-xl mx-auto">
         {steps.map((s, index) => {
           const isCompleted = currentStep > s.step;
           const isCurrent = currentStep === s.step;
-          const isUpcoming = currentStep < s.step;
 
           return (
-            <div key={s.step} className="flex items-center flex-1 last:flex-none">
-              <div className="flex flex-col items-center gap-2">
+            <div key={s.step} className="flex items-start flex-1 last:flex-none">
+              {/* Step circle + label */}
+              <div className="flex flex-col items-center gap-1.5 w-full">
                 {/* Circle */}
                 <div
                   className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-300",
+                    "flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all duration-300 shrink-0",
                     isCompleted
                       ? "border-emerald-500 bg-emerald-500 text-white"
                       : isCurrent
@@ -50,15 +53,15 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                   )}
                 >
                   {isCompleted ? (
-                    <Check className="h-5 w-5" />
+                    <Check className="h-4 w-4" />
                   ) : (
-                    <s.icon className="h-5 w-5" />
+                    <s.icon className="h-4 w-4" />
                   )}
                 </div>
-                {/* Label */}
+                {/* Label - hidden on very small screens */}
                 <span
                   className={cn(
-                    "text-xs font-medium text-center whitespace-nowrap",
+                    "text-[11px] font-medium text-center leading-tight hidden sm:block",
                     isCompleted
                       ? "text-emerald-600 dark:text-emerald-400"
                       : isCurrent
@@ -68,17 +71,33 @@ export function StepIndicator({ currentStep }: StepIndicatorProps) {
                 >
                   {s.label}
                 </span>
-              </div>
-              {/* Connector line */}
-              {index < steps.length - 1 && (
-                <div
+                {/* Short label for mobile */}
+                <span
                   className={cn(
-                    "flex-1 h-0.5 mx-2 sm:mx-3 mt-[-16px] sm:mt-[-20px] transition-all duration-300",
-                    currentStep > s.step
-                      ? "bg-emerald-500"
-                      : "bg-gray-200 dark:bg-gray-800"
+                    "text-[11px] font-medium text-center leading-tight sm:hidden",
+                    isCompleted
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : isCurrent
+                      ? "text-amber-700 dark:text-amber-400"
+                      : "text-muted-foreground"
                   )}
-                />
+                >
+                  {s.shortLabel}
+                </span>
+              </div>
+
+              {/* Connector line - positioned between circles */}
+              {index < steps.length - 1 && (
+                <div className="flex items-center pt-[18px] flex-1 px-1">
+                  <div
+                    className={cn(
+                      "w-full h-0.5 transition-all duration-300",
+                      currentStep > s.step
+                        ? "bg-emerald-500"
+                        : "bg-gray-200 dark:bg-gray-800"
+                    )}
+                  />
+                </div>
               )}
             </div>
           );

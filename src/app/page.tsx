@@ -137,50 +137,52 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background">
+      {/* Header - fixed height, clear separation */}
       <header className="border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
               <Calendar className="h-5 w-5 text-amber-700 dark:text-amber-400" />
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-foreground">Satsang Schedule Manager</h1>
-              <p className="text-xs text-muted-foreground hidden sm:block">
-                Upload · Configure Pathis · Auto-Generate
-              </p>
+            <div className="min-w-0">
+              <h1 className="text-base font-bold text-foreground truncate">Satsang Schedule Manager</h1>
             </div>
           </div>
           {currentStep === 3 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleExportJSON}
-                className="text-xs gap-1.5"
+                className="text-xs gap-1"
               >
-                Export JSON
+                JSON
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRegenerate}
                 disabled={isGenerating}
-                className="text-xs gap-1.5"
+                className="text-xs gap-1"
               >
-                <RefreshIcon className={`h-3.5 w-3.5 ${isGenerating ? "animate-spin" : ""}`} />
-                Regenerate
+                <RefreshIcon className={`h-3 w-3 ${isGenerating ? "animate-spin" : ""}`} />
+                Redo
               </Button>
-              <Button variant="ghost" size="sm" onClick={handleStartOver} className="text-xs gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5" />
-                New File
+              <Button variant="ghost" size="sm" onClick={handleStartOver} className="text-xs gap-1">
+                <RotateCcw className="h-3 w-3" />
+                Reset
               </Button>
             </div>
           )}
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        <StepIndicator currentStep={currentStep} />
+      {/* Main content - proper spacing below fixed header */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 pb-12">
+        {/* Step indicator - well separated from header */}
+        <div className="mb-6">
+          <StepIndicator currentStep={currentStep} />
+        </div>
 
         {/* Step 1 */}
         {currentStep === 1 && (
@@ -236,7 +238,7 @@ export default function Home() {
 
         {/* Step 2 */}
         {currentStep === 2 && schedule && (
-          <div className="space-y-4 animate-in fade-in duration-300">
+          <div className="space-y-5 animate-in fade-in duration-300">
             <div>
               <h2 className="text-xl font-bold text-foreground">Configure Pathis & Baal Satsang</h2>
               <p className="text-sm text-muted-foreground mt-1">
@@ -264,20 +266,12 @@ export default function Home() {
         {/* Step 3 */}
         {currentStep === 3 && generatedSchedule && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
                 <h2 className="text-xl font-bold text-foreground">Generated Schedule</h2>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-0.5">
                   {generatedSchedule.config.pathis.length} pathis · {generatedSchedule.entries.length} entries
                 </p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button variant="outline" size="sm" onClick={handleBack} className="text-xs gap-1.5">
-                  <ChevronLeft className="h-3.5 w-3.5" /> Edit Config
-                </Button>
-                <Button variant="outline" size="sm" onClick={handleStartOver} className="text-xs gap-1.5">
-                  <RotateCcw className="h-3.5 w-3.5" /> Start Over
-                </Button>
               </div>
             </div>
 
@@ -289,7 +283,6 @@ export default function Home() {
             )}
 
             <AnalyticsDashboard schedule={generatedSchedule} />
-            <Separator />
             <ScheduleTable schedule={generatedSchedule} />
           </div>
         )}

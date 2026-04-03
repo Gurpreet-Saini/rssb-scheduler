@@ -130,3 +130,25 @@ Stage Summary:
 - Insufficient pathis validation is now prominently displayed with clear error messaging and disabled generate button
 - Equal distribution algorithm now uses deterministic rotation instead of random selection for tighter balance
 - Build passes successfully
+
+---
+Task ID: 7
+Agent: main
+Task: Fix remaining UI overlapping issues (user reported "still overlapping")
+
+Work Log:
+- Analyzed user's two new screenshots using VLM and browser automation
+- Discovered critical bug: layout.tsx imported `<Toaster />` from shadcn/ui but all components use `toast` from `sonner` - this caused sonner toasts to auto-render at default top-right position, overlapping with the sticky header buttons on Step 3
+- Fixed layout.tsx to import `<Toaster />` from `@/components/ui/sonner` instead of `@/components/ui/toaster`
+- Updated sonner.tsx to use `position="bottom-right"` so toasts no longer overlap with header
+- Rewrote header: fixed height `h-14` instead of auto padding, compact button labels (JSON/Redo/Reset), `min-w-0` and `shrink-0` to prevent overflow
+- Rewrote step indicator: removed all negative margins, used clean `flex items-start` layout with `pt-[18px]` for connector alignment, separate mobile/desktop labels
+- Main content: changed from `py-6 space-y-6` to `pt-6 pb-12` with explicit `mb-6` around step indicator
+- Step 3: simplified header row, removed duplicate buttons (kept in header only)
+- Removed test page and test-schedule.json that were created for debugging
+
+Stage Summary:
+- Fixed sonner/shadcn toast system mismatch - root cause of header overlap
+- Rewrote step indicator with zero negative margins
+- Compacted header to fixed height to prevent layout shift
+- Build passes successfully
