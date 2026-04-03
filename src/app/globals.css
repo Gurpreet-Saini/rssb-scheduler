@@ -120,3 +120,46 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Scrollable panels with always-visible scrollbars */
+.scrollable-panel {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Webkit (Chrome, Safari, Edge) */
+.scrollable-panel::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollable-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollable-panel::-webkit-scrollbar-thumb {
+  background-color: rgb(209 213 219);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.scrollable-panel::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(156 163 175);
+  background-clip: content-box;
+}
+
+/* Firefox */
+.scrollable-panel {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(209 213 219) transparent;
+}
+
+/* Dark mode */
+.dark .scrollable-panel::-webkit-scrollbar-thumb {
+  background-color: rgb(75 85 99);
+  background-clip: content-box;
+}
+.dark .scrollable-panel::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(107 114 128);
+  background-clip: content-box;
+}
+.dark .scrollable-panel {
+  scrollbar-color: rgb(75 85 99) transparent;
+}

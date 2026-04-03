@@ -7,7 +7,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -222,7 +221,8 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <ScrollArea className="max-h-[700px]">
+        {/* Native scrollable container for the full schedule */}
+        <div className="scrollable-panel max-h-[700px]">
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
             {filteredCenters.map((centerName) => {
               const group = groupedByCenter.get(centerName)!;
@@ -369,7 +369,7 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
               );
             })}
           </div>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );

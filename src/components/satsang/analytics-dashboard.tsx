@@ -6,8 +6,6 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -138,7 +136,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
         </div>
       </div>
 
-      {/* Pathi Slot Distribution - Full Width */}
+      {/* Pathi Slot Distribution - Full Width with native scroll */}
       <Card className="overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -147,79 +145,79 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="max-h-[500px]">
+          <div className="scrollable-panel max-h-[400px]">
             <div className="space-y-3 p-6">
-          {metrics.slotMetrics
-            .filter((s) => s.slot !== "D" || hasAnyBaalSatsang)
-            .map((slot) => {
-              const counts = schedule.config.pathis.map((p) => slot.assignments[p] || 0);
-              const maxCount = Math.max(...counts, 1);
-              const minCount = Math.min(...counts);
-              const range = maxCount - minCount;
+              {metrics.slotMetrics
+                .filter((s) => s.slot !== "D" || hasAnyBaalSatsang)
+                .map((slot) => {
+                  const counts = schedule.config.pathis.map((p) => slot.assignments[p] || 0);
+                  const maxCount = Math.max(...counts, 1);
+                  const minCount = Math.min(...counts);
+                  const range = maxCount - minCount;
 
-              return (
-                <div
-                  key={slot.slot}
-                  className={`rounded-lg border p-3 space-y-2.5 ${slotBgColors[slot.slot]} ${slotBorderColors[slot.slot]}`}
-                >
-                  {/* Slot header row */}
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <Badge className={`${slotLabelColors[slot.slot]} text-xs px-2 py-0.5 border-0 font-bold`}>
-                        Slot-{slot.slot}
-                      </Badge>
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {slot.total} assignments
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        (avg {slot.average.toFixed(1)}/pathi · spread {range})
-                      </span>
-                    </div>
-                    <BalanceIndicator stdDev={slot.stdDev} average={slot.average} />
-                  </div>
-
-                  {/* Bar chart with labels */}
-                  <div className="flex items-end gap-2">
-                    {schedule.config.pathis.map((pathi) => {
-                      const count = slot.assignments[pathi] || 0;
-                      const height = Math.max((count / maxCount) * 100, 8);
-                      return (
-                        <div
-                          key={`${slot.slot}-${pathi}`}
-                          className="flex-1 flex flex-col items-center gap-1"
-                          title={`${pathi}: ${count} assignments in Slot-${slot.slot}`}
-                        >
-                          <span className="text-[10px] font-bold text-foreground">{count}</span>
-                          <div
-                            className="w-full rounded-t-md transition-all duration-300 hover:opacity-80"
-                            style={{ height: `${Math.max(height, 10)}%`, minHeight: "4px" }}
-                          >
-                            <div className={`w-full h-full rounded-t-md ${slotBarColors[slot.slot]}`} />
-                          </div>
+                  return (
+                    <div
+                      key={slot.slot}
+                      className={`rounded-lg border p-3 space-y-2.5 ${slotBgColors[slot.slot]} ${slotBorderColors[slot.slot]}`}
+                    >
+                      {/* Slot header row */}
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <Badge className={`${slotLabelColors[slot.slot]} text-xs px-2 py-0.5 border-0 font-bold`}>
+                            Slot-{slot.slot}
+                          </Badge>
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {slot.total} assignments
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            (avg {slot.average.toFixed(1)}/pathi · spread {range})
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Pathi names under bars */}
-                  <div className="flex gap-2">
-                    {schedule.config.pathis.map((pathi) => (
-                      <div key={pathi} className="flex-1 text-center">
-                        <span className="text-[9px] text-muted-foreground truncate block" title={pathi}>
-                          {pathi.length > 8 ? pathi.substring(0, 7) + "…" : pathi}
-                        </span>
+                        <BalanceIndicator stdDev={slot.stdDev} average={slot.average} />
                       </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+
+                      {/* Bar chart with labels */}
+                      <div className="flex items-end gap-2">
+                        {schedule.config.pathis.map((pathi) => {
+                          const count = slot.assignments[pathi] || 0;
+                          const height = Math.max((count / maxCount) * 100, 8);
+                          return (
+                            <div
+                              key={`${slot.slot}-${pathi}`}
+                              className="flex-1 flex flex-col items-center gap-1"
+                              title={`${pathi}: ${count} assignments in Slot-${slot.slot}`}
+                            >
+                              <span className="text-[10px] font-bold text-foreground">{count}</span>
+                              <div
+                                className="w-full rounded-t-md transition-all duration-300 hover:opacity-80"
+                                style={{ height: `${Math.max(height, 10)}%`, minHeight: "4px" }}
+                              >
+                                <div className={`w-full h-full rounded-t-md ${slotBarColors[slot.slot]}`} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Pathi names under bars */}
+                      <div className="flex gap-2">
+                        {schedule.config.pathis.map((pathi) => (
+                          <div key={pathi} className="flex-1 text-center">
+                            <span className="text-[9px] text-muted-foreground truncate block" title={pathi}>
+                              {pathi.length > 8 ? pathi.substring(0, 7) + "…" : pathi}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Per-Pathi Summary + Ghar Summary row */}
+      {/* Per-Pathi Summary + SK Distribution row */}
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Per-Pathi Summary Table */}
         <Card className="overflow-hidden">
@@ -230,7 +228,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="max-h-[320px]">
+            <div className="scrollable-panel max-h-[300px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -292,7 +290,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
                   })}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
 
@@ -305,7 +303,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="max-h-[320px]">
+            <div className="scrollable-panel max-h-[300px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -336,12 +334,12 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
                   ))}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Satsang Ghar Summary - Full Width */}
+      {/* Satsang Ghar Summary - Full Width with native scroll */}
       <Card className="overflow-hidden">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -350,7 +348,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="max-h-[300px]">
+          <div className="scrollable-panel max-h-[280px]">
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {metrics.gharSummary.map((ghar) => (
                 <div
@@ -380,7 +378,7 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </div>

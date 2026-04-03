@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback } from "react";
 import { Plus, X, UserPlus, Sparkles, Users, AlertTriangle, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SatsangSchedule } from "@/lib/excel-parser";
 import { toast } from "sonner";
@@ -163,7 +162,7 @@ export function PathiManager({
               </Badge>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <div className="flex gap-2">
               <Input
                 placeholder="Enter pathi name..."
@@ -182,7 +181,8 @@ export function PathiManager({
               </Button>
             </div>
 
-            <ScrollArea className="max-h-[280px]">
+            {/* Pathi list - native scroll */}
+            <div className="scrollable-panel max-h-[240px]">
               {pathis.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground text-sm">
                   <Users className="h-8 w-8 mx-auto mb-2 opacity-30" />
@@ -198,15 +198,15 @@ export function PathiManager({
                       key={pathi}
                       className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-gray-50 dark:bg-gray-900/30 group hover:bg-gray-100 dark:hover:bg-gray-900/50 transition-colors"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span className="text-xs text-muted-foreground w-5 text-right shrink-0">
                           {i + 1}.
                         </span>
-                        <span className="text-sm font-medium">{pathi}</span>
+                        <span className="text-sm font-medium truncate">{pathi}</span>
                       </div>
                       <button
                         onClick={() => removePathi(pathi)}
-                        className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded-md hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-all"
+                        className="opacity-0 group-hover:opacity-100 flex h-6 w-6 items-center justify-center rounded-md hover:bg-rose-100 dark:hover:bg-rose-900/40 transition-all shrink-0"
                       >
                         <X className="h-3.5 w-3.5 text-rose-500" />
                       </button>
@@ -214,7 +214,7 @@ export function PathiManager({
                   ))}
                 </div>
               )}
-            </ScrollArea>
+            </div>
 
             {/* Slot Info */}
             {pathis.length > 0 && (
@@ -266,12 +266,13 @@ export function PathiManager({
               )}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
               Enable Baal Satsang to add a 4th pathi slot (Pathi-D) to all sessions of that ghar.
             </p>
 
-            <ScrollArea className="max-h-[280px]">
+            {/* Baal Satsang list - native scroll */}
+            <div className="scrollable-panel max-h-[240px]">
               <div className="space-y-2">
                 {schedule.ghars.map((ghar) => {
                   const isEnabled = baalSatsangGhars.includes(ghar.name);
@@ -295,7 +296,7 @@ export function PathiManager({
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {isEnabled && (
                           <Badge className="text-[9px] px-1.5 py-0 border-0 bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
                             +Pathi-D
@@ -310,7 +311,7 @@ export function PathiManager({
                   );
                 })}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Generate Button */}
             <Separator />
