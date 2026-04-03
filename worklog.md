@@ -183,3 +183,26 @@ Stage Summary:
 - Pathi Slot Distribution UI significantly improved with color-coded sections and larger bars
 - ScheduleTable completely redesigned to center-grouped layout showing one center at a time without overlapping
 - Build passes successfully
+
+---
+Task ID: 9
+Agent: Main Agent
+Task: Change schedule view to group by CENTER with entries sorted by DATE within each center
+
+Work Log:
+- Rewrote schedule-table.tsx to group entries by CENTER (gharName) instead of by date
+- Centers sorted by category (SP → SC → C) then alphabetically
+- Within each center, entries sorted chronologically by date (improved parseDateSortable to handle "03 May 2026" and "03 May" formats)
+- Each center header shows: MapPin icon, category badge, center name, session counts (total/live/VCD), date range
+- Expanded view shows Date + Time + SK + Shabad + Pathi A/B/C/D columns
+- Filter auto-expands the selected center
+- CSV export now sorts by center name, then by date within center
+- Removed unused Calendar import, replaced with MapPin icon
+- Removed date-keyed expand/collapse state, replaced with center-keyed
+- Build passes successfully
+
+Stage Summary:
+- Complete Schedule now groups all satsang for each center by date chronologically
+- Each collapsible section shows all entries for one center, sorted by date
+- Date range displayed in center header (e.g., "03-May → 31-May")
+- Build passes successfully
