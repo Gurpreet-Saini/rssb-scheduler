@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import {
   Calendar, ChevronLeft, ChevronRight, RefreshCw,
   AlertTriangle, Save, Download, RotateCcw, Sparkles, Loader2, UserCog,
+  ArrowRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,94 @@ function parsePathiSlots(slotsJson: string): string[] {
   }
 }
 
+/** Helper: get the day of week from a date string like "03 May 2026" or "03-May-2026" */
+function getDayOfWeek(dateStr: string): string {
+  if (!dateStr) return "";
+  const months: Record<string, number> = {
+    Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5,
+    Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11,
+  };
+  const parts = dateStr.trim().split(/[\s-]+/);
+  let day: number, month: number, year: number = 2026;
+
+  if (parts.length === 2) {
+    if (/^\d+$/.test(parts[0]) && months[parts[1]] !== undefined) {
+      day = parseInt(parts[0], 10);
+      month = months[parts[1]];
+    } else if (/^\d+$/.test(parts[1]) && months[parts[0]] !== undefined) {
+      day = parseInt(parts[1], 10);
+      month = months[parts[0]];
+    } else return "";
+  } else if (parts.length === 3) {
+    if (/^\d+$/.test(parts[0]) && months[parts[1]] !== undefined) {
+      day = parseInt(parts[0], 10);
+      month = months[parts[1]];
+      year = parseInt(parts[2], 10) || 2026;
+    } else if (/^\d+$/.test(parts[1]) && months[parts[0]] !== undefined) {
+      day = parseInt(parts[1], 10);
+      month = months[parts[0]];
+      year = parseInt(parts[2], 10) || 2026;
+    } else return "";
+  } else return "";
+
+  const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const d = new Date(year, month, day);
+  return isNaN(d.getTime()) ? "" : days[d.getDay()];
+}
+
+/** Helper: parse date string to YYYY-MM-DD for sorting */
+function parseDateSortable(dateStr: string): string {
+  if (!dateStr) return "";
+  const months: Record<string, string> = {
+    Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+    Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+  };
+  const parts = dateStr.trim().split(/[\s-]+/);
+  if (parts.length === 2) {
+    let day: string, month: string;
+    if (/^\d+$/.test(parts[0]) && months[parts[1]]) {
+      day = parts[0].padStart(2, "0");
+      month = months[parts[1]];
+    } else if (/^\d+$/.test(parts[1]) && months[parts[0]]) {
+      day = parts[1].padStart(2, "0");
+      month = months[parts[0]];
+    } else return dateStr;
+    return `2026-${month}-${day}`;
+  }
+  if (parts.length === 3) {
+    let day: string, month: string;
+    if (/^\d+$/.test(parts[0]) && months[parts[1]]) {
+      day = parts[0].padStart(2, "0");
+      month = months[parts[1]];
+    } else if (/^\d+$/.test(parts[1]) && months[parts[0]]) {
+      day = parts[1].padStart(2, "0");
+      month = months[parts[0]];
+    } else return dateStr;
+    return `2026-${month}-${day}`;
+  }
+  return dateStr;
+}
+
+const ALL_SLOTS = ["A", "B", "C", "D"] as const;
+const slotLabels: Record<string, string> = {
+  A: "Slot A (Live)",
+  B: "Slot B",
+  C: "Slot C",
+  D: "Slot D (Baal)",
+};
+const slotColors: Record<string, string> = {
+  A: "text-sky-600 bg-sky-50 border-sky-200",
+  B: "text-emerald-600 bg-emerald-50 border-emerald-200",
+  C: "text-amber-600 bg-amber-50 border-amber-200",
+  D: "text-purple-600 bg-purple-50 border-purple-200",
+};
+const slotColorsInactive: Record<string, string> = {
+  A: "text-gray-300 bg-gray-50 border-gray-200 opacity-50",
+  B: "text-gray-300 bg-gray-50 border-gray-200 opacity-50",
+  C: "text-gray-300 bg-gray-50 border-gray-200 opacity-50",
+  D: "text-gray-300 bg-gray-50 border-gray-200 opacity-50",
+};
+
 export function ScheduleWizardView() {
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [schedule, setSchedule] = useState<SatsangSchedule | null>(null);
@@ -74,6 +163,16 @@ export function ScheduleWizardView() {
   const [reportName, setReportName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [effectiveCenterId, setEffectiveCenterId] = useState<string>(selectedCenterId || "");
+
+  // Slot toggle state for wizard step 2
+  const [wizardSlotToggles, setWizardSlotToggles] = useState<Record<string, boolean>>({
+    A: true,
+    B: true,
+    C: true,
+    D: false,
+  });
+  // Local pathi slot overrides for the wizard (only active slots get filtered)
+  const [pathiSlotOverrides, setPathiSlotOverrides] = useState<Record<string, string[]>>({});
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
@@ -111,6 +210,13 @@ export function ScheduleWizardView() {
 
   const activePathis = storePathis.filter((p) => p.isActive);
 
+  // Filter pathis by wizard slot toggles
+  const filteredPathis = activePathis.filter((p) => {
+    const pSlots = parsePathiSlots(p.slots);
+    // Check if this pathi has at least one slot that is enabled in the wizard toggles
+    return pSlots.some((s) => wizardSlotToggles[s]);
+  });
+
   const handleFile = useCallback(async (file: File) => {
     setIsProcessing(true);
     try {
@@ -139,22 +245,48 @@ export function ScheduleWizardView() {
     if (currentStep > 1) setCurrentStep((s) => (s - 1) as WizardStep);
   }, [currentStep]);
 
+  // Toggle individual pathi's slot in the wizard
+  const handleTogglePathiSlot = useCallback((pathiId: string, slot: string) => {
+    setPathiSlotOverrides((prev) => {
+      const pathi = activePathis.find((p) => p.id === pathiId);
+      if (!pathi) return prev;
+      const currentSlots = parsePathiSlots(pathi.slots);
+      const overrides = prev[pathiId] || currentSlots;
+      const newSlots = overrides.includes(slot)
+        ? overrides.filter((s) => s !== slot)
+        : [...overrides, slot];
+
+      if (newSlots.length === 0) return prev; // Don't allow empty
+      return { ...prev, [pathiId]: newSlots };
+    });
+  }, [activePathis]);
+
+  // Get effective slots for a pathi (considering overrides)
+  const getEffectiveSlots = useCallback((pathi: Pathi): string[] => {
+    const baseSlots = parsePathiSlots(pathi.slots);
+    const overrides = pathiSlotOverrides[pathi.id];
+    return overrides || baseSlots;
+  }, [pathiSlotOverrides]);
+
   const handleGenerate = useCallback(async () => {
     if (!schedule) return;
-    if (activePathis.length === 0) {
-      toast.error("No active pathis. Please add pathis in the Pathis section.");
+    if (filteredPathis.length === 0) {
+      toast.error("No active pathis with enabled slots. Please adjust slot toggles or add pathis.");
       return;
     }
 
     setIsGenerating(true);
     setScheduleWarning(null);
     try {
-      const pathiNames = activePathis.map((p) => p.name);
+      // Build pathi list filtered by enabled wizard slots
+      const pathiNames = filteredPathis.map((p) => p.name);
 
-      // Build pathiSlots map
+      // Build pathiSlots map from effective slots
       const pathiSlots: Record<string, string[]> = {};
-      for (const p of activePathis) {
-        pathiSlots[p.name] = parsePathiSlots(p.slots);
+      for (const p of filteredPathis) {
+        const effectiveSlots = getEffectiveSlots(p);
+        // Only include slots that are enabled in wizard toggles
+        pathiSlots[p.name] = effectiveSlots.filter((s) => wizardSlotToggles[s]);
       }
 
       const response = await fetch("/api/generate-schedule", {
@@ -164,6 +296,7 @@ export function ScheduleWizardView() {
           scheduleData: schedule,
           pathis: pathiNames,
           baalSatsangGhars,
+          pathiSlots,
         }),
       });
 
@@ -173,8 +306,6 @@ export function ScheduleWizardView() {
         return;
       }
 
-      // Also do a client-side generation with slot awareness
-      // For now, use the API result but enhance with pathiSlots
       setGeneratedSchedule(result.data);
       setGeneratedLocal(result.data);
       setScheduleData(schedule);
@@ -192,18 +323,23 @@ export function ScheduleWizardView() {
     } finally {
       setIsGenerating(false);
     }
-  }, [schedule, activePathis, baalSatsangGhars, setGeneratedSchedule, setScheduleData, setBaalSatsangGhars]);
+  }, [schedule, filteredPathis, baalSatsangGhars, wizardSlotToggles, getEffectiveSlots, setGeneratedSchedule, setScheduleData, setBaalSatsangGhars]);
 
   const handleRegenerate = useCallback(async () => {
     if (!schedule) return;
     setIsGenerating(true);
     setScheduleWarning(null);
     try {
-      const pathiNames = activePathis.map((p) => p.name);
+      const pathiNames = filteredPathis.map((p) => p.name);
+      const pathiSlots: Record<string, string[]> = {};
+      for (const p of filteredPathis) {
+        const effectiveSlots = getEffectiveSlots(p);
+        pathiSlots[p.name] = effectiveSlots.filter((s) => wizardSlotToggles[s]);
+      }
       const response = await fetch("/api/generate-schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduleData: schedule, pathis: pathiNames, baalSatsangGhars }),
+        body: JSON.stringify({ scheduleData: schedule, pathis: pathiNames, baalSatsangGhars, pathiSlots }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -223,7 +359,7 @@ export function ScheduleWizardView() {
     } finally {
       setIsGenerating(false);
     }
-  }, [schedule, activePathis, baalSatsangGhars, setGeneratedSchedule]);
+  }, [schedule, filteredPathis, baalSatsangGhars, wizardSlotToggles, getEffectiveSlots, setGeneratedSchedule]);
 
   const handleSaveReport = async () => {
     if (!generatedSchedule || !reportName.trim()) return;
@@ -243,8 +379,14 @@ export function ScheduleWizardView() {
           centerId: cid,
           scheduleData: JSON.stringify(generatedSchedule),
           pathiConfig: JSON.stringify({
-            pathis: activePathis.map((p) => p.name),
+            pathis: filteredPathis.map((p) => p.name),
             baalSatsangGhars,
+            pathiSlots: Object.fromEntries(
+              filteredPathis.map((p) => [
+                p.name,
+                getEffectiveSlots(p).filter((s) => wizardSlotToggles[s]),
+              ])
+            ),
           }),
         }),
       });
@@ -273,6 +415,7 @@ export function ScheduleWizardView() {
     setScheduleWarning(null);
     setBaalSatsangGhars([]);
     setScheduleData(null);
+    setPathiSlotOverrides({});
     toast.info("Ready for a new schedule");
   }, [setGeneratedSchedule, setBaalSatsangGhars, setScheduleData]);
 
@@ -290,6 +433,76 @@ export function ScheduleWizardView() {
     toast.success("JSON file downloaded");
   }, [generatedSchedule]);
 
+  // ===== Per-Pathi CSV Download =====
+  const handleDownloadPathiList = useCallback(() => {
+    if (!generatedSchedule) return;
+
+    // Collect all unique pathi names from the schedule
+    const pathiNameSet = new Set<string>();
+    for (const e of generatedSchedule.entries) {
+      if (e.pathiA && e.pathiA !== "N/A") pathiNameSet.add(e.pathiA);
+      if (e.pathiB) pathiNameSet.add(e.pathiB);
+      if (e.pathiC) pathiNameSet.add(e.pathiC);
+      if (e.pathiD) pathiNameSet.add(e.pathiD);
+    }
+    const allPathiNames = Array.from(pathiNameSet).sort();
+
+    // For each pathi, build a list of assignments sorted by date
+    function csvEscape(s: string): string {
+      if (s.includes(",") || s.includes('"')) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }
+
+    // Generate CSV for each pathi
+    for (const pathiName of allPathiNames) {
+      const rows: string[] = [];
+      rows.push("Pathi Name,Place,Date,Day,Time,Slot");
+      rows.push(`${csvEscape(pathiName)},,,,,`);
+
+      const assignments: Array<{
+        place: string;
+        date: string;
+        day: string;
+        time: string;
+        slot: string;
+      }> = [];
+
+      for (const e of generatedSchedule.entries) {
+        const day = getDayOfWeek(e.entry.date);
+        const time = e.entry.time || "";
+        if (e.pathiA === pathiName) {
+          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "A" });
+        }
+        if (e.pathiB === pathiName) {
+          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "B" });
+        }
+        if (e.pathiC === pathiName) {
+          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "C" });
+        }
+        if (e.pathiD === pathiName) {
+          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "D" });
+        }
+      }
+
+      // Sort by date
+      assignments.sort((a, b) => parseDateSortable(a.date).localeCompare(parseDateSortable(b.date)));
+
+      for (const a of assignments) {
+        rows.push("" + "," + csvEscape(a.place) + "," + csvEscape(a.date) + "," + a.day + "," + csvEscape(a.time) + "," + a.slot);
+      }
+
+      const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pathi_${pathiName.replace(/\s+/g, "_")}_schedule.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    toast.success(`Downloaded ${allPathiNames.length} pathi schedule files`);
+  }, [generatedSchedule]);
+
   const toggleBaalSatsang = useCallback(
     (gharName: string) => {
       const updated = baalSatsangGhars.includes(gharName)
@@ -300,12 +513,15 @@ export function ScheduleWizardView() {
     [baalSatsangGhars]
   );
 
-  const slotColors: Record<string, string> = {
-    A: "text-sky-600 bg-sky-50 border-sky-200",
-    B: "text-emerald-600 bg-emerald-50 border-emerald-200",
-    C: "text-amber-600 bg-amber-50 border-amber-200",
-    D: "text-purple-600 bg-purple-50 border-purple-200",
-  };
+  // Global slot toggle: enable/disable a slot for ALL pathis in the wizard
+  const handleGlobalSlotToggle = useCallback((slot: string) => {
+    setWizardSlotToggles((prev) => ({
+      ...prev,
+      [slot]: !prev[slot],
+    }));
+  }, []);
+
+  const enabledSlotCount = Object.values(wizardSlotToggles).filter(Boolean).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -350,7 +566,13 @@ export function ScheduleWizardView() {
                 </div>
               </div>
               <Separator />
-              <div className="flex justify-end">
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => {
+                  setSchedule(null);
+                  toast.info("File cleared. Upload a new one.");
+                }} className="gap-2 text-muted-foreground">
+                  <RotateCcw className="h-4 w-4" /> Clear & Re-upload
+                </Button>
                 <Button
                   onClick={handleNext}
                   className="gap-2 bg-amber-600 hover:bg-amber-700"
@@ -371,7 +593,7 @@ export function ScheduleWizardView() {
               Configure Pathis & Baal Satsang
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Review pathis from your center and toggle Baal Satsang per ghar
+              Review pathis from your center, toggle slots, and configure Baal Satsang
             </p>
           </div>
 
@@ -403,15 +625,59 @@ export function ScheduleWizardView() {
             </Card>
           )}
 
+          {/* Global Slot Toggle Bar */}
+          <Card className="rounded-xl overflow-hidden border-2 border-dashed border-gray-200">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-amber-600" />
+                Enable Assignment Slots
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {enabledSlotCount} of {ALL_SLOTS.length} active
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pb-4">
+              <p className="text-xs text-muted-foreground mb-3">
+                Toggle slots to enable/disable them for the schedule generation. Disabled slots will not have pathi assignments.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {ALL_SLOTS.map((slot) => {
+                  const isEnabled = wizardSlotToggles[slot];
+                  return (
+                    <button
+                      key={slot}
+                      onClick={() => handleGlobalSlotToggle(slot)}
+                      className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+                        isEnabled
+                          ? `${slotColors[slot]} border-current shadow-sm scale-[1.02]`
+                          : `${slotColorsInactive[slot]} border-current`
+                      }`}
+                    >
+                      <Switch
+                        checked={isEnabled}
+                        className="pointer-events-none"
+                        style={{
+                          // Override switch colors to match slot
+                          // We use the native Switch component but prevent interaction
+                        }}
+                      />
+                      <span>{slotLabels[slot]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid lg:grid-cols-2 gap-4">
-            {/* Pathi list from DB */}
+            {/* Pathi list from DB with per-pathi slot toggles */}
             <Card className="rounded-xl overflow-hidden">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <UserCog className="h-4 w-4 text-amber-600" />
-                  Active Pathis
+                  Pathis
                   <Badge variant="secondary" className="ml-auto text-xs">
-                    {activePathis.length}
+                    {filteredPathis.length} / {activePathis.length} active
                   </Badge>
                 </CardTitle>
               </CardHeader>
@@ -435,11 +701,16 @@ export function ScheduleWizardView() {
                 ) : (
                   <div className="scrollable-panel max-h-[300px] space-y-1">
                     {activePathis.map((pathi, i) => {
-                      const slots = parsePathiSlots(pathi.slots);
+                      const effectiveSlots = getEffectiveSlots(pathi);
+                      const isEnabled = effectiveSlots.some((s) => wizardSlotToggles[s]);
                       return (
                         <div
                           key={pathi.id}
-                          className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-50 dark:bg-gray-900/30"
+                          className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
+                            isEnabled
+                              ? "bg-gray-50 dark:bg-gray-900/30"
+                              : "bg-gray-100/50 dark:bg-gray-900/10 opacity-50"
+                          }`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-xs text-muted-foreground w-5 text-right shrink-0">
@@ -450,13 +721,16 @@ export function ScheduleWizardView() {
                             </span>
                           </div>
                           <div className="flex gap-1 shrink-0">
-                            {["A", "B", "C", "D"].map((slot) => {
-                              const has = slots.includes(slot);
+                            {ALL_SLOTS.map((slot) => {
+                              const hasSlot = effectiveSlots.includes(slot);
+                              const globalEnabled = wizardSlotToggles[slot];
                               return (
                                 <span
                                   key={slot}
                                   className={`inline-flex items-center justify-center h-5 w-5 rounded text-[10px] font-bold ${
-                                    has ? slotColors[slot] : "text-gray-300 bg-gray-100"
+                                    hasSlot && globalEnabled
+                                      ? slotColors[slot]
+                                      : slotColorsInactive[slot]
                                   }`}
                                 >
                                   {slot}
@@ -475,7 +749,8 @@ export function ScheduleWizardView() {
                     <Separator />
                     <p className="text-[11px] text-muted-foreground">
                       Slot badges show which slots each pathi is eligible for.
-                      Manage in the Pathis section.
+                      Grayed out = disabled globally or for that pathi.
+                      Manage individual pathi slots in the Pathis section.
                     </p>
                   </>
                 )}
@@ -552,9 +827,9 @@ export function ScheduleWizardView() {
                     setBaalSatsangGhars(baalSatsangGhars);
                     handleGenerate();
                   }}
-                  disabled={isGenerating || activePathis.length === 0}
+                  disabled={isGenerating || filteredPathis.length === 0 || enabledSlotCount === 0}
                   className={`w-full gap-2 font-medium ${
-                    activePathis.length === 0
+                    filteredPathis.length === 0 || enabledSlotCount === 0
                       ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                       : "bg-emerald-600 hover:bg-emerald-700 text-white"
                   }`}
@@ -565,10 +840,15 @@ export function ScheduleWizardView() {
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Generating...
                     </>
-                  ) : activePathis.length === 0 ? (
+                  ) : filteredPathis.length === 0 ? (
                     <>
                       <AlertTriangle className="h-4 w-4" />
                       Add Pathis First
+                    </>
+                  ) : enabledSlotCount === 0 ? (
+                    <>
+                      <AlertTriangle className="h-4 w-4" />
+                      Enable at Least One Slot
                     </>
                   ) : (
                     <>
@@ -584,7 +864,7 @@ export function ScheduleWizardView() {
           <Separator />
           <div className="flex justify-between">
             <Button variant="outline" onClick={handleBack} className="gap-2">
-              <ChevronLeft className="h-4 w-4" /> Back
+              <ChevronLeft className="h-4 w-4" /> Back to Upload
             </Button>
           </div>
         </div>
@@ -612,6 +892,16 @@ export function ScheduleWizardView() {
               >
                 <Save className="h-3.5 w-3.5" />
                 Save Report
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadPathiList}
+                className="text-xs gap-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
+                title="Download per-pathi schedule lists sorted by date"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Pathi Lists
               </Button>
               <Button
                 variant="outline"

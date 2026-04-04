@@ -7,7 +7,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { scheduleData, pathis, baalSatsangGhars } = body;
+    const { scheduleData, pathis, baalSatsangGhars, pathiSlots } = body;
 
     if (!scheduleData || !scheduleData.ghars || scheduleData.ghars.length === 0) {
       return NextResponse.json(
@@ -47,6 +47,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Build the config object
+    const config: { pathis: string[]; baalSatsangGhars: string[]; pathiSlots?: Record<string, string[]> } = {
+      pathis: uniquePathis,
+      baalSatsangGhars,
+    };
+
+    // Only include pathiSlots if provided and non-empty
+    if (pathiSlots && typeof pathiSlots === "object" && Object.keys(pathiSlots).length > 0) {
+      config.pathiSlots = pathiSlots;
+    }
+
     // Calculate validation info
     const validation = calculateMinPathis(scheduleData, baalSatsangGhars);
 
@@ -68,10 +79,7 @@ export async function POST(request: NextRequest) {
       warning = `You have ${uniquePathis.length} pathis. Recommended: ${validation.recommended}+ for well-balanced distribution. With fewer pathis, the same person may appear at multiple ghars on the same date.`;
     }
 
-    const generated = assignPathis(scheduleData, {
-      pathis: uniquePathis,
-      baalSatsangGhars,
-    });
+    const generated = assignPathis(scheduleData, config);
 
     const response: GenerateScheduleResponse = {
       success: true,
