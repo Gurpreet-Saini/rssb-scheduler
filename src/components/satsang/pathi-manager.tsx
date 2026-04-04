@@ -76,6 +76,8 @@ export function PathiManager({
   );
 
   // Calculate validation
+  // A pathi can only be at ONE place per date (all satsangs at same time).
+  // Minimum = max total slots needed on any single date.
   const totalEntries = schedule.ghars.reduce(
     (acc, ghar) => acc + ghar.entries.length, 0
   );
@@ -87,25 +89,30 @@ export function PathiManager({
     .filter((g) => baalSatsangGhars.includes(g.name))
     .reduce((acc, ghar) => acc + ghar.entries.length, 0);
 
-  // Find max ghars per date
+  // Count total slots needed per date
+  const dateSlotCount: Record<string, number> = {};
   const dateGharCount: Record<string, number> = {};
-  const dateLiveCount: Record<string, number> = {};
   for (const ghar of schedule.ghars) {
+    const isBaal = baalSatsangGhars.includes(ghar.name);
     for (const entry of ghar.entries) {
       if (!entry.date) continue;
       dateGharCount[entry.date] = (dateGharCount[entry.date] || 0) + 1;
-      if (entry.nameOfSK !== "VCD") {
-        dateLiveCount[entry.date] = (dateLiveCount[entry.date] || 0) + 1;
+      if (entry.nameOfSK === "VCD") {
+        dateSlotCount[entry.date] = (dateSlotCount[entry.date] || 0) + 2; // B + C
+      } else {
+        dateSlotCount[entry.date] = (dateSlotCount[entry.date] || 0) + 3; // A + B + C
+      }
+      if (isBaal) {
+        dateSlotCount[entry.date] = (dateSlotCount[entry.date] || 0) + 1; // D
       }
     }
   }
+  const maxSlotsPerDate = Math.max(...Object.values(dateSlotCount), 0);
   const maxGharsPerDate = Math.max(...Object.values(dateGharCount), 0);
-  const maxLivePerDate = Math.max(...Object.values(dateLiveCount), 0);
-  // Per-ghar constraint: each ghar needs 3 (live) or 4 (live+baal) unique pathis per date
-  const hasAnyBaal = baalSatsangGhars.length > 0;
-  const slotsPerGhar = hasAnyBaal ? 4 : 3;
-  const minPathis = slotsPerGhar;
-  const recommendedPathis = Math.max(minPathis + 2, maxGharsPerDate + 1);
+
+  // Each pathi fills only 1 slot per date, so minimum = max slots on busiest date
+  const minPathis = maxSlotsPerDate;
+  const recommendedPathis = minPathis + 2;
   const isInsufficient = pathis.length > 0 && pathis.length < minPathis;
   const isBelowRecommended = pathis.length >= minPathis && pathis.length < recommendedPathis;
 
@@ -129,7 +136,7 @@ export function PathiManager({
             </p>
             <p className="text-xs text-rose-600 dark:text-rose-400 leading-relaxed">
               You have <strong>{pathis.length}</strong> pathi{pathis.length > 1 ? "s" : ""} but need at least{" "}
-              <strong>{minPathis}</strong>. Each ghar needs {slotsPerGhar} different pathis per date (for slots B, C, A{hasAnyBaal ? ", D" : ""}) — the same person cannot fill two slots at the same place. Please add{" "}
+              <strong>{minPathis}</strong>. All satsangs happen at the same time, so each pathi can only be at one place per date. The busiest date has <strong>{maxSlotsPerDate}</strong> slots across {maxGharsPerDate} ghars. Please add{" "}
               <strong>{minPathis - pathis.length} more</strong> pathi{minPathis - pathis.length > 1 ? "s" : ""} to generate the schedule.
             </p>
           </div>
@@ -348,7 +355,7 @@ export function PathiManager({
             </Button>
             {!isInsufficient && pathis.length === 0 && (
               <p className="text-xs text-center text-muted-foreground">
-                Add at least <strong>{minPathis}</strong> pathis to generate ({slotsPerGhar} unique per ghar)
+                Add at least <strong>{minPathis}</strong> pathis to generate ({maxSlotsPerDate} slots on busiest date)
               </p>
             )}
           </CardContent>

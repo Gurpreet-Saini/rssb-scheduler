@@ -6,18 +6,23 @@
 // and Baal Satsang support.
 // ============================================
 //
-// KEY CONSTRAINT: A pathi can fill at most ONE slot at ONE ghar (place) per date.
-//   - Pathi "x" CANNOT be both Pathi-B and Pathi-C at Place-1 on Date-Y.
-//   - Pathi "x" CAN be Pathi-B at Place-1 AND Pathi-A at Place-2 on Date-Y.
+// KEY CONSTRAINT: A pathi can fill at most ONE slot at ONE place on ONE date.
+//   - Pathi "x" CANNOT be at Place-1 and Place-2 on the same date.
+//   - Pathi "x" CANNOT be Pathi-A and Pathi-B at the same place on the same date.
 //   - Within a single ghar on a date: Pathi-A ≠ Pathi-B ≠ Pathi-C ≠ Pathi-D.
+//   - Across all ghars on a date: each pathi appears at most ONCE.
 //
-// MINIMUM PATHIS: At each ghar, the number of active slots determines how many
-//   unique pathis are needed at that ghar on that date:
-//   - VCD session: 2 pathis (B + C)
-//   - Live session: 3 pathis (A + B + C)
-//   - Live + Baal: 4 pathis (A + B + C + D)
-//   Global minimum = max active slots at any single ghar (3 or 4).
-//   But for good distribution, recommended = much higher.
+// RATIONALE: All satsangs happen at the same time (09:30 AM / 09:00 AM),
+// so a person can physically only be at one place on a given date.
+//
+// MINIMUM PATHIS: On each date, the total number of slot assignments across ALL
+// ghars determines the minimum pathis needed. Since each pathi can fill only
+// ONE slot across all ghars on a date:
+//   - If 5 ghars have live sessions on a date, need 5 pathis (one per ghar, slot A)
+//     PLUS 5 more for slot B, PLUS 5 more for slot C = 15 pathis minimum.
+//   - If some sessions are VCD, they only need 2 slots (B, C) instead of 3 (A, B, C).
+//   - If some ghars have Baal Satsang, they need 4 slots instead of 3.
+//   Global minimum = max total slots needed on any single date.
 // ============================================
 
 import {
@@ -44,60 +49,52 @@ function standardDeviation(values: number[]): number {
 /**
  * Calculate the minimum number of pathis needed for conflict-free assignment.
  *
- * Per-place-per-date booking: a pathi can fill at most ONE slot at ONE ghar per date.
- * A pathi CAN do Slot-B at Place-1 and Slot-C at Place-2 on the same date.
- * But CANNOT do Slot-B and Slot-C at Place-1 on the same date.
+ * Per-date booking: a pathi can fill at most ONE slot (at one ghar) per date.
+ * All satsangs happen at the same time, so a person cannot be at two places.
  *
- * At each ghar on a date, active slots determine unique pathis needed:
- *   - VCD: 2 (B, C)
- *   - Live: 3 (A, B, C)
- *   - Live+Baal: 4 (A, B, C, D)
+ * On each date, count total slots needed:
+ *   - VCD session: 2 slots (B, C)
+ *   - Live session: 3 slots (A, B, C)
+ *   - Live + Baal: 4 slots (A, B, C, D)
  *
- * Minimum pathis = max slots at any single ghar (3 for live, 4 with baal).
- * A pathi CAN serve the same slot at multiple ghars on the same date,
- * so the number of ghars per date doesn't directly increase the minimum.
+ * Minimum pathis = max total slots across all dates.
+ * Because each pathi can fill only 1 slot per date, the number of pathis
+ * must be >= total slots on the busiest date.
  */
 export function calculateMinPathis(
   schedule: SatsangSchedule,
   baalSatsangGhars: string[]
 ): { minimum: number; recommended: number; maxPerDate: number; maxPerSlot: number; maxPerSlotA: number; details: string } {
   const dateGharCount: Record<string, number> = {};
-  const dateLiveCount: Record<string, number> = {};
-  const dateBaalCount: Record<string, number> = {};
+  // Count total slots needed per date (NOT just ghars)
+  const dateSlotCount: Record<string, number> = {};
 
   for (const ghar of schedule.ghars) {
     const isBaal = baalSatsangGhars.includes(ghar.name);
     for (const entry of ghar.entries) {
       if (!entry.date) continue;
       dateGharCount[entry.date] = (dateGharCount[entry.date] || 0) + 1;
-      if (entry.nameOfSK !== "VCD") {
-        dateLiveCount[entry.date] = (dateLiveCount[entry.date] || 0) + 1;
+
+      // Count slots needed for this session
+      if (entry.nameOfSK === "VCD") {
+        dateSlotCount[entry.date] = (dateSlotCount[entry.date] || 0) + 2; // B + C
+      } else {
+        dateSlotCount[entry.date] = (dateSlotCount[entry.date] || 0) + 3; // A + B + C
       }
       if (isBaal) {
-        dateBaalCount[entry.date] = (dateBaalCount[entry.date] || 0) + 1;
+        dateSlotCount[entry.date] = (dateSlotCount[entry.date] || 0) + 1; // D
       }
     }
   }
 
   const maxGharsPerDate = Math.max(...Object.values(dateGharCount), 0);
-  const maxLivePerDate = Math.max(...Object.values(dateLiveCount), 0);
-  const maxBaalPerDate = Math.max(...Object.values(dateBaalCount), 0);
+  const maxSlotsPerDate = Math.max(...Object.values(dateSlotCount), 0);
 
-  const hasAnyBaalSatsang = baalSatsangGhars.length > 0;
+  // Each pathi can fill exactly 1 slot per date, so minimum = max slots on any date
+  const minimum = maxSlotsPerDate;
 
-  // Per-ghar constraint: each ghar needs up to 3 (live) or 4 (live+baal) unique pathis
-  // Minimum for feasibility = max active slots at any single ghar
-  const slotsPerGhar = hasAnyBaalSatsang ? 4 : 3;
-  const minimum = slotsPerGhar;
-
-  // Recommended: enough for good rotation across all ghars per date
-  // More pathis = better distribution = less chance of same pathi at adjacent ghars
-  const recommended = Math.max(minimum + 2, maxGharsPerDate + 1);
-
-  const maxPerSlotA = maxLivePerDate;
-  const maxPerSlotBC = maxGharsPerDate;
-  const maxPerSlotD = maxBaalPerDate;
-  const maxPerSlot = Math.max(maxPerSlotA, maxPerSlotBC, maxPerSlotD);
+  // Recommended: have more than minimum for balanced rotation
+  const recommended = minimum + 2;
 
   const totalDates = Object.keys(dateGharCount).length;
   const totalEntries = schedule.ghars.reduce((a, g) => a + g.entries.length, 0);
@@ -106,33 +103,15 @@ export function calculateMinPathis(
 
   const details = [
     `${totalDates} dates, ${maxGharsPerDate} ghars per date`,
-    `Each ghar needs ${slotsPerGhar} unique pathis per date (B, C, ${hasAnyBaalSatsang ? "A, D" : "A"})`,
-    `Slot-A: up to ${maxPerSlotA} per date, Slot-B/C: up to ${maxPerSlotBC} per date each`,
-    maxPerSlotD > 0 ? `Slot-D: up to ${maxPerSlotD} per date (Baal Satsang)` : null,
+    `Max ${maxSlotsPerDate} slot assignments on a single date`,
+    `Each pathi can fill only 1 slot per date (same time across all places)`,
+    `Minimum ${minimum} pathis needed (one per slot on busiest date)`,
     `${liveEntries} live + ${vcdEntries} VCD = ${totalEntries} total sessions`,
-  ].filter(Boolean).join(" · ");
+  ].join(" · ");
 
-  return { minimum, recommended, maxPerDate: maxGharsPerDate, maxPerSlot, maxPerSlotA, details };
+  return { minimum, recommended, maxPerDate: maxGharsPerDate, maxPerSlot: maxSlotsPerDate, maxPerSlotA: maxGharsPerDate, details };
 }
 
-/**
- * Main entry point: Assign pathis to all schedule entries.
- *
- * Algorithm (strict per-slot equal distribution with per-ghar conflict prevention):
- * 1. Flatten all entries, group by date, sort deterministically.
- * 2. For each date, for each ghar entry (sorted):
- *    - Pick pathi for Slot-A (if not VCD) — using deterministic rotation
- *    - Pick pathi for Slot-B — using deterministic rotation
- *    - Pick pathi for Slot-C — using deterministic rotation
- *    - Pick pathi for Slot-D (if Baal Satsang) — using deterministic rotation
- * 3. Per-ghar booking: once a pathi is assigned to ANY slot at a ghar on a date,
- *    it is excluded from all other slots at that same ghar on that date.
- * 4. Cross-place allowed: the same pathi CAN be assigned to different slots
- *    at DIFFERENT ghars on the same date.
- * 5. Equal distribution: each slot has its own rotation pointer that cycles
- *    through available pathis, always preferring the least-loaded one.
- *    Ties are broken by deterministic rotation index (not random).
- */
 /**
  * Extended config that optionally includes per-pathi slot eligibility.
  * If `pathiSlots` is provided, a pathi is only eligible for slots
@@ -145,6 +124,23 @@ export interface PathiSlotConfig {
   pathiSlots?: Record<string, string[]>;
 }
 
+/**
+ * Main entry point: Assign pathis to all schedule entries.
+ *
+ * Algorithm (strict per-slot equal distribution with per-date conflict prevention):
+ * 1. Flatten all entries, group by date, sort deterministically.
+ * 2. For each date, for each ghar entry (sorted):
+ *    - Pick pathi for Slot-A (if not VCD) — using deterministic rotation
+ *    - Pick pathi for Slot-B — using deterministic rotation
+ *    - Pick pathi for Slot-C — using deterministic rotation
+ *    - Pick pathi for Slot-D (if Baal Satsang) — using deterministic rotation
+ * 3. Per-date booking: once a pathi is assigned to ANY slot at ANY ghar on a date,
+ *    it is excluded from ALL other slots at ALL ghars on that date.
+ *    (All satsangs happen at the same time, so a person can only be at one place.)
+ * 4. Equal distribution: each slot has its own rotation pointer that cycles
+ *    through available pathis, always preferring the least-loaded one.
+ *    Ties are broken by deterministic rotation index (not random).
+ */
 export function assignPathis(
   schedule: SatsangSchedule,
   config: PathiConfig | PathiSlotConfig
@@ -167,7 +163,6 @@ export function assignPathis(
   }
 
   // Per-slot rotation indices for deterministic tiebreaking
-  // Each slot has its own rotation that advances after each assignment
   const slotRotation: Record<string, number> = { A: 0, B: 0, C: 0, D: 0 };
 
   interface DateEntry {
@@ -211,18 +206,12 @@ export function assignPathis(
   for (const dateKey of dateMap) {
     const entriesForDate = dateEntriesMap[dateKey];
 
-    // Per-place-per-date booking: track which pathis are already assigned
-    // to ANY slot at a specific ghar (place) on this date.
-    // A pathi CANNOT be in Slot-B and Slot-C at the same place on the same date.
-    // But a pathi CAN do Slot-B at Place-1 and Slot-C at Place-2 on the same date.
-    const bookedPerGhar: Record<string, Set<string>> = {};
+    // CRITICAL: Per-date booking. A pathi can fill at most ONE slot
+    // across ALL ghars on this date. All satsangs happen at the same time,
+    // so a person physically cannot be at two places on the same day.
+    const bookedForDate: Set<string> = new Set();
 
     for (const de of entriesForDate) {
-      if (!bookedPerGhar[de.gharName]) {
-        bookedPerGhar[de.gharName] = new Set();
-      }
-      const gharBooked = bookedPerGhar[de.gharName];
-
       const isVCD = de.entry.nameOfSK === "VCD";
 
       let assignedA = "N/A";
@@ -232,27 +221,25 @@ export function assignPathis(
 
       // Slot-A: only for live sessions (not VCD)
       if (!isVCD) {
-        assignedA = pickPathiBalanced(slotCounts["A"], pathis, gharBooked, slotRotation, "A", pathiSlots);
-        gharBooked.add(assignedA); // Mark as used at this ghar on this date
+        assignedA = pickPathiBalanced(slotCounts["A"], pathis, bookedForDate, slotRotation, "A", pathiSlots);
+        bookedForDate.add(assignedA); // Person is now at this place — cannot go anywhere else today
         slotCounts["A"][assignedA]++;
       }
 
       // Slot-B: for all sessions (including VCD)
-      assignedB = pickPathiBalanced(slotCounts["B"], pathis, gharBooked, slotRotation, "B", pathiSlots);
-      gharBooked.add(assignedB); // Cannot be reused for C or D at this ghar
+      assignedB = pickPathiBalanced(slotCounts["B"], pathis, bookedForDate, slotRotation, "B", pathiSlots);
+      bookedForDate.add(assignedB); // Person cannot go anywhere else today
       slotCounts["B"][assignedB]++;
 
       // Slot-C: for all sessions (including VCD)
-      // Will automatically exclude pathis already used for A and B at this ghar
-      assignedC = pickPathiBalanced(slotCounts["C"], pathis, gharBooked, slotRotation, "C", pathiSlots);
-      gharBooked.add(assignedC); // Cannot be reused for D at this ghar
+      assignedC = pickPathiBalanced(slotCounts["C"], pathis, bookedForDate, slotRotation, "C", pathiSlots);
+      bookedForDate.add(assignedC);
       slotCounts["C"][assignedC]++;
 
       // Slot-D: only for Baal Satsang ghars
-      // Will automatically exclude pathis already used for A, B, C at this ghar
       if (de.hasBaalSatsang) {
-        assignedD = pickPathiBalanced(slotCounts["D"], pathis, gharBooked, slotRotation, "D", pathiSlots);
-        gharBooked.add(assignedD);
+        assignedD = pickPathiBalanced(slotCounts["D"], pathis, bookedForDate, slotRotation, "D", pathiSlots);
+        bookedForDate.add(assignedD);
         slotCounts["D"][assignedD]++;
       }
 
@@ -286,24 +273,19 @@ export function assignPathis(
 
 /**
  * Pick the pathi with fewest assignments in the given slot,
- * excluding any already booked for ANY slot at this ghar (place) on this date.
+ * excluding any already booked for ANY slot at ANY ghar on this date.
  * Uses deterministic rotation for tiebreaking to ensure strict equal distribution.
- *
- * Instead of random tiebreaking among equally-loaded candidates,
- * we rotate through candidates in a fixed cycle. This guarantees
- * that over the full schedule, each pathi gets exactly the same
- * number of assignments (or within ±1 when total isn't divisible).
  */
 function pickPathiBalanced(
   counts: Record<string, number>,
   pathis: string[],
-  bookedForGhar: Set<string>,
+  bookedForDate: Set<string>,
   slotRotation: Record<string, number>,
   slotName: string,
   pathiSlots?: Record<string, string[]>
 ): string {
-  // First filter by ghar booking, then by slot eligibility
-  let available = pathis.filter((p) => !bookedForGhar.has(p));
+  // First filter: exclude pathis already assigned ANYWHERE on this date
+  let available = pathis.filter((p) => !bookedForDate.has(p));
 
   // If pathiSlots map is provided, only include pathis eligible for this slot
   if (pathiSlots) {
@@ -314,9 +296,9 @@ function pickPathiBalanced(
   }
 
   if (available.length === 0) {
-    // All pathis already booked at this ghar for this date.
-    // This should NOT happen if pathis >= minimum (3 or 4).
-    // Fallback: pick the least-assigned pathi for this slot overall.
+    // All pathis already booked on this date.
+    // This means there aren't enough pathis for the number of slots.
+    // Fallback: pick the least-assigned pathi for this slot overall (cross-date).
     const sorted = [...pathis].sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0));
     return sorted[0];
   }
@@ -329,7 +311,6 @@ function pickPathiBalanced(
   }
 
   // Deterministic rotation: pick from candidates using rotation index
-  // This ensures fair cycling through equally-loaded pathis
   const rotIdx = slotRotation[slotName] % candidates.length;
   const selected = candidates[rotIdx];
 
@@ -347,8 +328,12 @@ function calculateMetrics(
   const vcdSessions = entries.filter((e) => e.entry.nameOfSK === "VCD").length;
   const liveSessions = entries.length - vcdSessions;
 
-  // Validate: check for same pathi in B and C at same ghar/date (conflict detection)
+  // Validate: check for conflicts
+  // 1. Same pathi in multiple slots at same ghar/date
+  // 2. Same pathi at different ghars on same date
   const conflicts: string[] = [];
+
+  // Check per-ghar conflicts (same pathi in multiple slots at one ghar)
   const gharDateMap: Record<string, AssignedScheduleEntry[]> = {};
   for (const e of entries) {
     const key = `${e.entry.date}|${e.gharName}`;
@@ -360,7 +345,26 @@ function calculateMetrics(
       const usedPathis = [e.pathiA, e.pathiB, e.pathiC, e.pathiD].filter(p => p && p !== "N/A");
       const uniquePathis = new Set(usedPathis);
       if (uniquePathis.size < usedPathis.length) {
-        conflicts.push(`${key}: ${usedPathis.join(", ")} (duplicate!)`);
+        conflicts.push(`Ghar conflict ${key}: ${usedPathis.join(", ")} (duplicate at same place!)`);
+      }
+    }
+  }
+
+  // Check cross-ghar conflicts (same pathi at different places on same date)
+  const datePathiMap: Record<string, Map<string, string[]>> = {};
+  for (const e of entries) {
+    if (!datePathiMap[e.entry.date]) datePathiMap[e.entry.date] = new Map();
+    const pathiPlaces = datePathiMap[e.entry.date];
+    const allPathis = [e.pathiA, e.pathiB, e.pathiC, e.pathiD].filter(p => p && p !== "N/A");
+    for (const p of allPathis) {
+      if (!pathiPlaces.has(p)) pathiPlaces.set(p, []);
+      pathiPlaces.get(p)!.push(e.gharName);
+    }
+  }
+  for (const [date, pathiPlaces] of Object.entries(datePathiMap)) {
+    for (const [pathi, places] of pathiPlaces) {
+      if (places.length > 1) {
+        conflicts.push(`Date conflict ${date}: "${pathi}" at ${places.join(" + ")} (same person at multiple places!)`);
       }
     }
   }
@@ -440,9 +444,9 @@ function calculateMetrics(
     };
   });
 
-  // Log conflicts if any (for debugging)
+  // Log conflicts if any
   if (conflicts.length > 0) {
-    console.error(`[Pathi Engine] ${conflicts.length} slot conflicts detected!`, conflicts.slice(0, 10));
+    console.error(`[Pathi Engine] ${conflicts.length} conflicts detected!`, conflicts.slice(0, 20));
   }
 
   return {

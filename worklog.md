@@ -328,3 +328,26 @@ Stage Summary:
 - Reports can be saved to DB and loaded later for viewing
 - JSON export of generated schedules
 - Default credentials: superadmin / admin123
+
+---
+Task ID: 1
+Agent: Main Agent
+Task: Fix pathi assignment bug - same person assigned at multiple places on same date
+
+Work Log:
+- Analyzed uploaded CSV files showing conflicts (e.g., Amarjeet kaur at HANGOLA + TIKKAR TAAL on 10 May 2026)
+- Root cause: Engine used `bookedPerGhar` (per-place-per-date) allowing cross-place assignments
+- All satsangs happen at same time (09:30/09:00 AM) so person cannot be at 2 places
+- Changed engine from `bookedPerGhar` to `bookedForDate` (Set<string> per date across ALL places)
+- Updated `calculateMinPathis`: minimum = max total slots on busiest date (was max slots per single ghar)
+- Updated `pickPathiBalanced`: receives `bookedForDate` instead of `bookedForGhar`
+- Added cross-ghar conflict detection in `calculateMetrics`
+- Updated API validation messages to explain per-date constraint
+- Updated pathi-manager.tsx validation UI messages
+- Tested with 65-session real-world schedule: 0 conflicts, 17 pathis, 15 minimum
+
+Stage Summary:
+- Fixed critical bug where same person was assigned to multiple places on same date
+- New minimum pathis = total slots on busiest date (e.g., 15 for 5 ghars)
+- Each pathi can fill exactly 1 slot across all ghars on any given date
+- Files modified: pathi-engine.ts, generate-schedule/route.ts, pathi-manager.tsx

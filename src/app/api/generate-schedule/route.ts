@@ -62,11 +62,13 @@ export async function POST(request: NextRequest) {
     const validation = calculateMinPathis(scheduleData, baalSatsangGhars);
 
     // Check if pathis are critically insufficient
+    // A pathi can only be at ONE place on ONE date (all satsangs happen at the same time).
+    // So we need at least as many pathis as the total slots on the busiest date.
     if (uniquePathis.length < validation.minimum) {
       return NextResponse.json(
         {
           success: false,
-          error: `Insufficient pathis! You have ${uniquePathis.length} pathis but need at least ${validation.minimum}. Each ghar needs ${validation.minimum} different pathis per date (for Pathi A, B, C${baalSatsangGhars.length > 0 ? ", D" : ""} slots — same pathi cannot fill two slots at the same place). Please add at least ${validation.minimum - uniquePathis.length} more pathi${validation.minimum - uniquePathis.length > 1 ? "s" : ""} before generating.`,
+          error: `Insufficient pathis! You have ${uniquePathis.length} pathis but need at least ${validation.minimum}. All satsangs happen at the same time, so each pathi can only be at one place per date. The busiest date has ${validation.maxPerSlot} slot assignments across all ghars. Each pathi fills only one slot per date. Please add at least ${validation.minimum - uniquePathis.length} more pathi${validation.minimum - uniquePathis.length > 1 ? "s" : ""} before generating.`,
           validation,
         },
         { status: 400 }
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
     // Check if pathis are fewer than recommended
     let warning: string | undefined;
     if (uniquePathis.length < validation.recommended) {
-      warning = `You have ${uniquePathis.length} pathis. Recommended: ${validation.recommended}+ for well-balanced distribution. With fewer pathis, the same person may appear at multiple ghars on the same date.`;
+      warning = `You have ${uniquePathis.length} pathis. Recommended: ${validation.recommended}+ for well-balanced distribution. With fewer pathis, the same person may need to fill multiple slots on a date.`;
     }
 
     const generated = assignPathis(scheduleData, config);
