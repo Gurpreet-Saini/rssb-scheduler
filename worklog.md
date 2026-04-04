@@ -228,3 +228,103 @@ Stage Summary:
 - Minimum pathis reduced to 3 (or 4 with Baal) from previous maxGharsPerDate
 - Conflict detection logging added for safety verification
 - Build passes successfully
+
+---
+## Task ID: 11 - backend-engineer
+### Work Task
+Set up Prisma DB schema, auth API, and CRUD API routes for the Satsang Schedule Management System.
+
+### Work Summary
+
+**Files Created/Modified:**
+
+1. **`prisma/schema.prisma`** — Replaced with new schema: User, Center, Pathi, SavedSchedule models with proper relations and indexes.
+2. **`prisma/seed.ts`** — Seeds default super admin (username: superadmin, password: admin123).
+3. **`src/lib/auth.ts`** — JWT auth utilities using jose (HS256, 7-day expiry, httpOnly cookie).
+4. **`src/lib/api-auth.ts`** — Auth middleware helpers: `withAuth()` and `withSuperAdmin()`.
+5. **Auth API Routes:** `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`.
+6. **Centers CRUD:** `GET/POST /api/centers`, `PUT/DELETE /api/centers/[id]` — SUPER_ADMIN only for mutations, CENTER_ADMIN sees own center.
+7. **Users CRUD:** `GET/POST /api/users`, `PUT/DELETE /api/users/[id]` — SUPER_ADMIN only, passwords excluded from responses, self-deletion blocked.
+8. **Pathis CRUD:** `GET/POST /api/pathis`, `PUT/DELETE /api/pathis/[id]` — Both roles, CENTER_ADMIN restricted to own center.
+9. **Saved Schedules CRUD:** `GET/POST /api/schedules/saved`, `GET/DELETE /api/schedules/saved/[id]` — Both roles, CENTER_ADMIN restricted to own center.
+
+All 13 new files pass ESLint with zero errors. No existing UI components or page.tsx were modified.
+
+---
+## Task ID: 12 - frontend-engineer
+### Work Task
+Build complete Auth UI + Admin Dashboard for the Satsang Schedule Management System.
+
+### Work Summary
+
+**Files Created:**
+
+1. **`src/lib/store.ts`** — Zustand global state store with auth state, navigation views, data caches (centers, users, pathis, savedSchedules), schedule state, and session initialization via `GET /api/auth/me`.
+
+2. **`src/components/admin/login-view.tsx`** — Clean login form with gradient background, username/password inputs, show/hide password toggle, amber-themed submit button, error display, and session creation.
+
+3. **`src/components/admin/admin-layout.tsx`** — Responsive sidebar + main content layout. Desktop: fixed 60-width sidebar with nav items, user info, logout. Mobile: Sheet-based slide-in sidebar with hamburger trigger. Breadcrumb bar with back-to-dashboard navigation. Role-based nav items (SUPER_ADMIN sees all 6 views, CENTER_ADMIN sees 4).
+
+4. **`src/components/admin/dashboard-view.tsx`** — Overview dashboard with stats cards (Centers, Users, Pathis, Saved Reports), quick action buttons, and centers overview table. CENTER_ADMIN sees own center info. Asynchronous data fetching with proper cleanup.
+
+5. **`src/components/admin/centers-view.tsx`** — Full CRUD for centers (SUPER_ADMIN only). Table with category badges, user/pathi/report counts. Add/Edit dialogs with name + category select (SP/SC/C). Delete with AlertDialog confirmation.
+
+6. **`src/components/admin/users-view.tsx`** — Full CRUD for users (SUPER_ADMIN only). Table with display name, username, role badge, center, actions. Create/Edit dialogs with username, password, display name, role select, center select. Delete with confirmation. Current user badge shown.
+
+7. **`src/components/admin/pathis-view.tsx`** — Pathi management with slot toggles. Center selector (SUPER_ADMIN) or auto-selected (CENTER_ADMIN). Pathi list with interactive slot badges (A/B/C/D) for enabling/disabling eligibility. Active/Inactive switch per pathi. Add pathi input, delete with confirmation. Stats showing active count, total, and total slots enabled.
+
+8. **`src/components/admin/schedule-wizard-view.tsx`** — Modified 3-step wizard integrating with DB pathis. Step 1: Upload Excel (same FileUpload component). Step 2: Center selector, DB-loaded pathi list with slot indicators, Baal Satsang toggles per ghar, generate button. Step 3: AnalyticsDashboard + ScheduleTable with Save Report dialog (enter name → POST to saved schedules API), JSON export, regenerate, reset.
+
+9. **`src/components/admin/saved-reports-view.tsx`** — Saved schedules list. Table with report name, saved date, actions (Load, Export JSON, Delete). Center filter for SUPER_ADMIN. Load sets generated schedule in store and navigates to schedule view. Delete with confirmation.
+
+**Files Modified:**
+
+10. **`src/app/page.tsx`** — Conditional renderer: loading spinner → LoginView (if no user) → AdminLayout with view router (dashboard/centers/users/pathis/schedule/saved-reports).
+
+11. **`src/lib/pathi-engine.ts`** — Added `PathiSlotConfig` interface with optional `pathiSlots: Record<string, string[]>` map. Modified `assignPathis()` to accept extended config. Modified `pickPathiBalanced()` to filter available pathis by slot eligibility when pathiSlots map is provided. Backward compatible — works without pathiSlots.
+
+12. **`src/components/satsang/schedule-table.tsx`** — Fixed lint error: converted `useMemo` with `setState` to derived value in `expandedSet` computation (removed effect-based auto-expand in favor of useMemo with placeFilter dependency).
+
+**Lint:** All files pass `bun run lint` with zero errors.
+
+---
+Task ID: 11
+Agent: Main Agent
+Task: Add authentication, user/center management, pathi slot toggles, and report save/load
+
+Work Log:
+- Installed bcryptjs, jose, @types/bcryptjs for JWT auth
+- Rewrote Prisma schema with User, Center, Pathi, SavedSchedule models
+- Ran db:push to create tables
+- Created seed.ts with default super admin (username: superadmin, password: admin123)
+- Created src/lib/auth.ts — JWT utilities (hashPassword, verifyPassword, createToken, verifyToken, getSession)
+- Created src/lib/api-auth.ts — withAuth() and withSuperAdmin() middleware helpers
+- Created 13 API routes:
+  - Auth: POST /api/auth/login, GET /api/auth/me, POST /api/auth/logout
+  - Centers: GET/POST /api/centers, PUT/DELETE /api/centers/[id]
+  - Users: GET/POST /api/users, PUT/DELETE /api/users/[id]
+  - Pathis: GET/POST /api/pathis, PUT/DELETE /api/pathis/[id]
+  - Saved Schedules: GET/POST /api/schedules/saved, GET/DELETE /api/schedules/saved/[id]
+- Created Zustand store (src/lib/store.ts) with auth state, navigation, data caches, schedule state
+- Created 9 UI components in src/components/admin/:
+  - login-view.tsx: Clean login form with gradient bg, password toggle
+  - admin-layout.tsx: Responsive sidebar (desktop fixed, mobile Sheet) + main content
+  - dashboard-view.tsx: Stats cards, quick actions, centers overview
+  - centers-view.tsx: Full CRUD with add/edit/delete dialogs
+  - users-view.tsx: Full CRUD with role/center selects, role badges
+  - pathis-view.tsx: Pathi management with interactive A/B/C/D slot toggles
+  - schedule-wizard-view.tsx: 3-step wizard using DB pathis, Save Report, export JSON
+  - saved-reports-view.tsx: Saved schedules list with Load/Export/Delete
+- Modified src/app/page.tsx: Conditional renderer (loading → login → admin layout)
+- Modified src/lib/pathi-engine.ts: Added PathiSlotConfig for slot-based filtering
+- Fixed lint in schedule-table.tsx: converted useMemo+setState to derived value
+- All passes lint clean, dev server compiles successfully
+
+Stage Summary:
+- Complete auth system with JWT cookies (7-day expiry)
+- Super Admin can manage centers, users, pathis for all centers
+- Center Admin can only manage their own center's pathis and schedules
+- Pathi slot toggles: each pathi can be toggled ON/OFF for slots A/B/C/D
+- Reports can be saved to DB and loaded later for viewing
+- JSON export of generated schedules
+- Default credentials: superadmin / admin123

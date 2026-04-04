@@ -133,11 +133,24 @@ export function calculateMinPathis(
  *    through available pathis, always preferring the least-loaded one.
  *    Ties are broken by deterministic rotation index (not random).
  */
+/**
+ * Extended config that optionally includes per-pathi slot eligibility.
+ * If `pathiSlots` is provided, a pathi is only eligible for slots
+ * listed in its array. If not provided, all pathis are eligible for all slots.
+ */
+export interface PathiSlotConfig {
+  pathis: string[];
+  baalSatsangGhars: string[];
+  /** Optional map: pathi name → eligible slots. If not set, all slots are eligible. */
+  pathiSlots?: Record<string, string[]>;
+}
+
 export function assignPathis(
   schedule: SatsangSchedule,
-  config: PathiConfig
+  config: PathiConfig | PathiSlotConfig
 ): GeneratedSchedule {
   const { pathis, baalSatsangGhars } = config;
+  const pathiSlots = 'pathiSlots' in config ? config.pathiSlots : undefined;
 
   if (pathis.length === 0) {
     throw new Error("At least one pathi is required");
@@ -219,26 +232,26 @@ export function assignPathis(
 
       // Slot-A: only for live sessions (not VCD)
       if (!isVCD) {
-        assignedA = pickPathiBalanced(slotCounts["A"], pathis, gharBooked, slotRotation, "A");
+        assignedA = pickPathiBalanced(slotCounts["A"], pathis, gharBooked, slotRotation, "A", pathiSlots);
         gharBooked.add(assignedA); // Mark as used at this ghar on this date
         slotCounts["A"][assignedA]++;
       }
 
       // Slot-B: for all sessions (including VCD)
-      assignedB = pickPathiBalanced(slotCounts["B"], pathis, gharBooked, slotRotation, "B");
+      assignedB = pickPathiBalanced(slotCounts["B"], pathis, gharBooked, slotRotation, "B", pathiSlots);
       gharBooked.add(assignedB); // Cannot be reused for C or D at this ghar
       slotCounts["B"][assignedB]++;
 
       // Slot-C: for all sessions (including VCD)
       // Will automatically exclude pathis already used for A and B at this ghar
-      assignedC = pickPathiBalanced(slotCounts["C"], pathis, gharBooked, slotRotation, "C");
+      assignedC = pickPathiBalanced(slotCounts["C"], pathis, gharBooked, slotRotation, "C", pathiSlots);
       gharBooked.add(assignedC); // Cannot be reused for D at this ghar
       slotCounts["C"][assignedC]++;
 
       // Slot-D: only for Baal Satsang ghars
       // Will automatically exclude pathis already used for A, B, C at this ghar
       if (de.hasBaalSatsang) {
-        assignedD = pickPathiBalanced(slotCounts["D"], pathis, gharBooked, slotRotation, "D");
+        assignedD = pickPathiBalanced(slotCounts["D"], pathis, gharBooked, slotRotation, "D", pathiSlots);
         gharBooked.add(assignedD);
         slotCounts["D"][assignedD]++;
       }
@@ -286,9 +299,19 @@ function pickPathiBalanced(
   pathis: string[],
   bookedForGhar: Set<string>,
   slotRotation: Record<string, number>,
-  slotName: string
+  slotName: string,
+  pathiSlots?: Record<string, string[]>
 ): string {
-  const available = pathis.filter((p) => !bookedForGhar.has(p));
+  // First filter by ghar booking, then by slot eligibility
+  let available = pathis.filter((p) => !bookedForGhar.has(p));
+
+  // If pathiSlots map is provided, only include pathis eligible for this slot
+  if (pathiSlots) {
+    available = available.filter((p) => {
+      const eligible = pathiSlots[p];
+      return eligible ? eligible.includes(slotName) : true;
+    });
+  }
 
   if (available.length === 0) {
     // All pathis already booked at this ghar for this date.

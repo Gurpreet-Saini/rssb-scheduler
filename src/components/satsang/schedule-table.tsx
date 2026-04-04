@@ -164,17 +164,13 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
 
   const centerKeys = useMemo(() => groupedByCenter.map((g) => g.name), [groupedByCenter]);
 
+  // Derive expanded set: auto-expand when filtering to a single center,
+  // or when showAll is true, otherwise use manual expandedCenters state.
   const expandedSet = useMemo(() => {
     if (showAll) return new Set(centerKeys);
+    if (placeFilter !== "all") return new Set([placeFilter]);
     return expandedCenters;
-  }, [expandedCenters, centerKeys, showAll]);
-
-  // Auto-expand when filtering to a single center
-  useMemo(() => {
-    if (placeFilter !== "all") {
-      setExpandedCenters(new Set([placeFilter]));
-    }
-  }, [placeFilter]);
+  }, [expandedCenters, centerKeys, showAll, placeFilter]);
 
   const toggleCenter = useCallback((name: string) => {
     setExpandedCenters((prev) => {
