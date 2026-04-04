@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import {
   Calendar, ChevronLeft, ChevronRight, RefreshCw,
   AlertTriangle, Save, Download, RotateCcw, Sparkles, Loader2, UserCog,
-  ArrowRight,
+  ArrowRight, MapPin, Ban, Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -173,6 +173,8 @@ export function ScheduleWizardView() {
   });
   // Local pathi slot overrides for the wizard (only active slots get filtered)
   const [pathiSlotOverrides, setPathiSlotOverrides] = useState<Record<string, string[]>>({});
+  // Per-pathi per-ghar exclusion: Record<pathiName, string[]> of excluded ghar names
+  const [pathiGharExclusions, setPathiGharExclusions] = useState<Record<string, string[]>>({});
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
@@ -261,6 +263,29 @@ export function ScheduleWizardView() {
     });
   }, [activePathis]);
 
+  // Toggle ghar exclusion for a pathi
+  const handleToggleGharExclusion = useCallback((pathiName: string, gharName: string) => {
+    setPathiGharExclusions((prev) => {
+      const current = prev[pathiName] || [];
+      const isExcluded = current.includes(gharName);
+      if (isExcluded) {
+        const updated = current.filter((g) => g !== gharName);
+        if (updated.length === 0) {
+          const { [pathiName]: _, ...rest } = prev;
+          return rest;
+        }
+        return { ...prev, [pathiName]: updated };
+      } else {
+        return { ...prev, [pathiName]: [...current, gharName] };
+      }
+    });
+  }, []);
+
+  // Check if a pathi is excluded from a ghar
+  const isPathiExcludedFromGhar = useCallback((pathiName: string, gharName: string): boolean => {
+    return (pathiGharExclusions[pathiName] || []).includes(gharName);
+  }, [pathiGharExclusions]);
+
   // Get effective slots for a pathi (considering overrides)
   const getEffectiveSlots = useCallback((pathi: Pathi): string[] => {
     const baseSlots = parsePathiSlots(pathi.slots);
@@ -297,6 +322,7 @@ export function ScheduleWizardView() {
           pathis: pathiNames,
           baalSatsangGhars,
           pathiSlots,
+          pathiExcludedGhars: pathiGharExclusions,
         }),
       });
 
@@ -323,7 +349,7 @@ export function ScheduleWizardView() {
     } finally {
       setIsGenerating(false);
     }
-  }, [schedule, filteredPathis, baalSatsangGhars, wizardSlotToggles, getEffectiveSlots, setGeneratedSchedule, setScheduleData, setBaalSatsangGhars]);
+  }, [schedule, filteredPathis, baalSatsangGhars, wizardSlotToggles, getEffectiveSlots, pathiGharExclusions, setGeneratedSchedule, setScheduleData, setBaalSatsangGhars]);
 
   const handleRegenerate = useCallback(async () => {
     if (!schedule) return;
@@ -339,7 +365,7 @@ export function ScheduleWizardView() {
       const response = await fetch("/api/generate-schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scheduleData: schedule, pathis: pathiNames, baalSatsangGhars, pathiSlots }),
+        body: JSON.stringify({ scheduleData: schedule, pathis: pathiNames, baalSatsangGhars, pathiSlots, pathiExcludedGhars: pathiGharExclusions }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -359,7 +385,7 @@ export function ScheduleWizardView() {
     } finally {
       setIsGenerating(false);
     }
-  }, [schedule, filteredPathis, baalSatsangGhars, wizardSlotToggles, getEffectiveSlots, setGeneratedSchedule]);
+  }, [schedule, filteredPathis, baalSatsangGhars, wizardSlotToggles, getEffectiveSlots, pathiGharExclusions, setGeneratedSchedule]);
 
   const handleSaveReport = async () => {
     if (!generatedSchedule || !reportName.trim()) return;
@@ -387,6 +413,7 @@ export function ScheduleWizardView() {
                 getEffectiveSlots(p).filter((s) => wizardSlotToggles[s]),
               ])
             ),
+            pathiExcludedGhars: pathiGharExclusions,
           }),
         }),
       });
@@ -416,6 +443,7 @@ export function ScheduleWizardView() {
     setBaalSatsangGhars([]);
     setScheduleData(null);
     setPathiSlotOverrides({});
+    setPathiGharExclusions({});
     toast.info("Ready for a new schedule");
   }, [setGeneratedSchedule, setBaalSatsangGhars, setScheduleData]);
 
@@ -860,6 +888,117 @@ export function ScheduleWizardView() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Pathi-Center (Ghar) Exclusions */}
+          {schedule && schedule.ghars.length > 0 && filteredPathis.length > 0 && (
+            <Card className="rounded-xl overflow-hidden border-2 border-dashed border-orange-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-orange-600" />
+                  Pathi Place Assignments
+                  <Badge variant="secondary" className="ml-auto text-xs">
+                    {Object.keys(pathiGharExclusions).length} exclusion{Object.keys(pathiGharExclusions).length !== 1 ? "s" : ""}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pb-4">
+                <p className="text-xs text-muted-foreground mb-3">
+                  Toggle OFF to exclude a pathi from a specific place. Excluded pathis will never be assigned to that place.
+                  For example: toggle OFF Place D for Ram — he will only go to A, B, C.
+                </p>
+                <div className="scrollable-panel max-h-[400px] overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead className="sticky top-0 bg-white dark:bg-gray-950 z-10">
+                      <tr>
+                        <th className="text-left py-2 px-2 font-semibold text-muted-foreground border-b min-w-[120px] sticky left-0 bg-white dark:bg-gray-950">
+                          Pathi
+                        </th>
+                        {schedule.ghars.map((ghar) => (
+                          <th
+                            key={ghar.name}
+                            className="py-2 px-1 font-semibold text-muted-foreground border-b text-center min-w-[60px]"
+                            title={ghar.name}
+                          >
+                            <span className="block max-w-[70px] truncate" title={ghar.name}>
+                              {ghar.name.length > 10 ? ghar.name.substring(0, 9) + "…" : ghar.name}
+                            </span>
+                          </th>
+                        ))}
+                        <th className="py-2 px-2 font-semibold text-muted-foreground border-b text-center min-w-[40px]">
+                          Avail
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPathis.map((pathi) => {
+                        const excludedCount = (pathiGharExclusions[pathi.name] || []).length;
+                        const availCount = schedule.ghars.length - excludedCount;
+                        return (
+                          <tr key={pathi.id} className="border-b border-gray-100 dark:border-gray-800">
+                            <td className="py-1.5 px-2 font-medium sticky left-0 bg-white dark:bg-gray-950 whitespace-nowrap">
+                              {pathi.name}
+                            </td>
+                            {schedule.ghars.map((ghar) => {
+                              const excluded = isPathiExcludedFromGhar(pathi.name, ghar.name);
+                              return (
+                                <td key={ghar.name} className="py-1.5 px-0.5 text-center">
+                                  <button
+                                    onClick={() => handleToggleGharExclusion(pathi.name, ghar.name)}
+                                    className={`inline-flex items-center justify-center h-6 w-6 rounded-md transition-all text-[10px] font-bold ${
+                                      excluded
+                                        ? "bg-red-100 text-red-500 border border-red-200 hover:bg-red-200"
+                                        : "bg-emerald-100 text-emerald-600 border border-emerald-200 hover:bg-emerald-200"
+                                    }`}
+                                    title={`${pathi.name} → ${ghar.name}: ${excluded ? "EXCLUDED" : "Allowed"}`}
+                                  >
+                                    {excluded ? <Ban className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                                  </button>
+                                </td>
+                              );
+                            })}
+                            <td className="py-1.5 px-2 text-center">
+                              <span className={`inline-flex items-center justify-center h-6 min-w-[24px] rounded-md text-[10px] font-bold ${
+                                availCount === 0
+                                  ? "bg-red-100 text-red-600"
+                                  : availCount < schedule.ghars.length
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-emerald-50 text-emerald-600"
+                              }`}>
+                                {availCount}/{schedule.ghars.length}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <span className="inline-flex items-center justify-center h-4 w-4 rounded bg-emerald-100 text-emerald-600"><Check className="h-2.5 w-2.5" /></span>
+                      Allowed
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="inline-flex items-center justify-center h-4 w-4 rounded bg-red-100 text-red-500"><Ban className="h-2.5 w-2.5" /></span>
+                      Excluded
+                    </span>
+                  </div>
+                  {Object.keys(pathiGharExclusions).length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-[11px] text-muted-foreground h-7"
+                      onClick={() => setPathiGharExclusions({})}
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset All Exclusions
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Separator />
           <div className="flex justify-between">

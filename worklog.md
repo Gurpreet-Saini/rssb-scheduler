@@ -351,3 +351,32 @@ Stage Summary:
 - New minimum pathis = total slots on busiest date (e.g., 15 for 5 ghars)
 - Each pathi can fill exactly 1 slot across all ghars on any given date
 - Files modified: pathi-engine.ts, generate-schedule/route.ts, pathi-manager.tsx
+---
+Task ID: 1-4
+Agent: Main Agent
+Task: Fix cross-location bug + implement per-pathi per-center (ghar) exclusion feature
+
+Work Log:
+- Read all relevant source files: pathi-engine.ts, schedule-wizard-view.tsx, generate-schedule/route.ts, pathis-view.tsx, store.ts, types.ts
+- Confirmed cross-location bug was ALREADY FIXED: `bookedForDate: Set<string>` on line 212 of pathi-engine.ts prevents any pathi from being at multiple places on the same date
+- Found that `pathiExcludedGhars` was partially defined in the interface but not wired through
+- Updated `pickPathiBalanced()` function signature to accept `pathiExcludedGhars` and `currentGharName` parameters
+- Added filtering logic in `pickPathiBalanced()` to exclude pathis banned from the current ghar
+- Updated all 4 callers of `pickPathiBalanced()` (slots A, B, C, D) to pass the new parameters
+- Updated API route to accept and forward `pathiExcludedGhars`
+- Added `pathiGharExclusions` state to wizard component
+- Added `handleToggleGharExclusion` and `isPathiExcludedFromGhar` callbacks
+- Added full "Pathi Place Assignments" card UI with interactive toggle matrix table
+- Updated generate, regenerate, and save report to pass exclusions
+- Fixed JSX parsing error (unclosed `<span>` tag)
+- Build verified successfully
+
+Stage Summary:
+- Cross-location same-day duplicate bug: Already fixed in engine (bookedForDate per-date Set)
+- Per-pathi per-ghar exclusion feature: Fully implemented
+  - Engine: pathiExcludedGhars map filters out excluded pathis per ghar
+  - API: Accepts and forwards pathiExcludedGhars parameter
+  - UI: Interactive matrix table with Check/Ban toggle buttons per pathi per ghar
+  - Shows "Avail X/Y" counter per pathi row
+  - Reset All Exclusions button
+  - Exclusion data persisted with saved reports

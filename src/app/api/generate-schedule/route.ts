@@ -7,7 +7,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { scheduleData, pathis, baalSatsangGhars, pathiSlots } = body;
+    const { scheduleData, pathis, baalSatsangGhars, pathiSlots, pathiExcludedGhars } = body;
 
     if (!scheduleData || !scheduleData.ghars || scheduleData.ghars.length === 0) {
       return NextResponse.json(
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the config object
-    const config: { pathis: string[]; baalSatsangGhars: string[]; pathiSlots?: Record<string, string[]> } = {
+    const config: { pathis: string[]; baalSatsangGhars: string[]; pathiSlots?: Record<string, string[]>; pathiExcludedGhars?: Record<string, string[]> } = {
       pathis: uniquePathis,
       baalSatsangGhars,
     };
@@ -56,6 +56,11 @@ export async function POST(request: NextRequest) {
     // Only include pathiSlots if provided and non-empty
     if (pathiSlots && typeof pathiSlots === "object" && Object.keys(pathiSlots).length > 0) {
       config.pathiSlots = pathiSlots;
+    }
+
+    // Only include pathiExcludedGhars if provided and non-empty
+    if (pathiExcludedGhars && typeof pathiExcludedGhars === "object" && Object.keys(pathiExcludedGhars).length > 0) {
+      config.pathiExcludedGhars = pathiExcludedGhars;
     }
 
     // Calculate validation info
