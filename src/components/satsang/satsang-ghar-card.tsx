@@ -112,44 +112,46 @@ export function SatsangGharCard({ ghar }: SatsangGharCardProps) {
             </TabsContent>
             <TabsContent value="details" className="mt-3">
               <ScrollArea className="max-h-[400px]">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-gray-800">
-                      <th className="text-left py-2 pr-3 font-semibold text-muted-foreground">Date</th>
-                      <th className="text-left py-2 pr-3 font-semibold text-muted-foreground">Speaker</th>
-                      <th className="text-left py-2 pr-3 font-semibold text-muted-foreground">Shabad</th>
-                      <th className="text-left py-2 pr-3 font-semibold text-muted-foreground hidden md:table-cell">Bani</th>
-                      <th className="text-left py-2 font-semibold text-muted-foreground hidden lg:table-cell">Book</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ghar.entries.map((entry, i) => (
-                      <tr key={i} className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-900/20">
-                        <td className="py-2 pr-3 whitespace-nowrap">
-                          <span className="text-foreground">{entry.date}</span>
-                          <br />
-                          <span className="text-muted-foreground text-[10px]">{entry.time}</span>
-                        </td>
-                        <td className="py-2 pr-3">
-                          {entry.nameOfSK === "VCD" ? (
-                            <span className="text-purple-600 font-medium">VCD</span>
-                          ) : (
-                            entry.nameOfSK
-                          )}
-                        </td>
-                        <td className="py-2 pr-3 max-w-[200px]">
-                          <span className="line-clamp-2" title={entry.shabad}>{entry.shabad || "—"}</span>
-                        </td>
-                        <td className="py-2 pr-3 max-w-[150px] hidden md:table-cell">
-                          <span className="line-clamp-1" title={entry.bani}>{entry.bani || "—"}</span>
-                        </td>
-                        <td className="py-2 max-w-[150px] hidden lg:table-cell">
-                          <span className="line-clamp-1" title={entry.book}>{entry.book || "—"}</span>
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs min-w-[400px] md:min-w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-gray-800">
+                        <th className="text-left py-2 pr-3 font-semibold text-muted-foreground whitespace-nowrap">Date</th>
+                        <th className="text-left py-2 pr-3 font-semibold text-muted-foreground whitespace-nowrap">Speaker</th>
+                        <th className="text-left py-2 pr-3 font-semibold text-muted-foreground">Shabad</th>
+                        <th className="text-left py-2 pr-3 font-semibold text-muted-foreground hidden md:table-cell">Bani</th>
+                        <th className="text-left py-2 font-semibold text-muted-foreground hidden lg:table-cell">Book</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {ghar.entries.map((entry, i) => (
+                        <tr key={i} className="border-b border-gray-100 dark:border-gray-800/50 hover:bg-gray-50 dark:hover:bg-gray-900/20">
+                          <td className="py-2 pr-3 whitespace-nowrap">
+                            <span className="text-foreground">{entry.date}</span>
+                            <br />
+                            <span className="text-muted-foreground text-[10px]">{entry.time}</span>
+                          </td>
+                          <td className="py-2 pr-3 whitespace-nowrap">
+                            {entry.nameOfSK === "VCD" ? (
+                              <span className="text-purple-600 font-medium">VCD</span>
+                            ) : (
+                              entry.nameOfSK
+                            )}
+                          </td>
+                          <td className="py-2 pr-3 max-w-[200px]">
+                            <span className="line-clamp-2" title={entry.shabad}>{entry.shabad || "—"}</span>
+                          </td>
+                          <td className="py-2 pr-3 max-w-[150px] hidden md:table-cell">
+                            <span className="line-clamp-1" title={entry.bani}>{entry.bani || "—"}</span>
+                          </td>
+                          <td className="py-2 max-w-[150px] hidden lg:table-cell">
+                            <span className="line-clamp-1" title={entry.book}>{entry.book || "—"}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </ScrollArea>
             </TabsContent>
           </Tabs>

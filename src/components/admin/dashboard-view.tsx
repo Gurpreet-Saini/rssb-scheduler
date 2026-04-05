@@ -26,42 +26,22 @@ export function DashboardView() {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
   const selectedCenterId = useAppStore((s) => s.selectedCenterId);
 
-  const [pathiCount, setPathiCount] = useState(0);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  useEffect(() => {
+    setIsSuperAdmin(user?.role === "SUPER_ADMIN");
+  }, [user]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const [centersRes, schedulesRes] = await Promise.all([
-          fetch("/api/centers"),
-          selectedCenterId
-            ? fetch(`/api/schedules/saved?centerId=${selectedCenterId}`)
-            : Promise.resolve(null),
-        ]);
-
+        const centersRes = await fetch("/api/centers");
         if (cancelled) return;
 
         if (centersRes.ok) {
           const cData = await centersRes.json();
           setCenters(cData.centers || []);
-        }
-
-        if (schedulesRes && schedulesRes.ok) {
-          const sData = await schedulesRes.json();
-          setSavedSchedules(sData.schedules || []);
-        }
-
-        if (selectedCenterId) {
-          const pathisRes = await fetch(
-            `/api/pathis?centerId=${selectedCenterId}`
-          );
-          if (cancelled) return;
-          if (pathisRes.ok) {
-            const pData = await pathisRes.json();
-            setPathiCount(pData.pathis?.length || 0);
-          }
         }
       } catch {
         if (!cancelled) toast.error("Failed to load dashboard data");
@@ -69,7 +49,7 @@ export function DashboardView() {
     };
     load();
     return () => { cancelled = true; };
-  }, [selectedCenterId, setCenters, setSavedSchedules]);
+  }, [setCenters]);
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -81,15 +61,9 @@ export function DashboardView() {
     return () => { cancelled = true; };
   }, [isSuperAdmin, setUsers]);
 
-  const totalPathis = centers.reduce(
-    (acc, c) => acc + (c._count?.pathis || 0),
-    0
-  );
-  const totalSchedules = isSuperAdmin
-    ? centers.reduce((acc, c) => acc + (c._count?.savedSchedules || 0), 0)
-    : savedSchedules.length;
-  const totalUsers = isSuperAdmin ? users.length : 0;
-  const displayPathis = isSuperAdmin ? totalPathis : pathiCount;
+  const displayPathis = centers.reduce((acc, c) => acc + (c._count?.pathis || 0), 0);
+  const displaySchedules = centers.reduce((acc, c) => acc + (c._count?.savedSchedules || 0), 0);
+  const displayUsers = isSuperAdmin ? users.length : 0;
 
   const myCenter = centers.find(
     (c) => c.id === user?.centerId
@@ -178,7 +152,7 @@ export function DashboardView() {
             icon: Users,
             color: "text-blue-600",
             bg: "bg-blue-50",
-            value: totalUsers,
+            value: displayUsers,
             label: "Users",
             show: isSuperAdmin,
           },
@@ -193,7 +167,7 @@ export function DashboardView() {
             icon: FileText,
             color: "text-purple-600",
             bg: "bg-purple-50",
-            value: totalSchedules,
+            value: displaySchedules,
             label: "Saved Reports",
           },
         ]
