@@ -6,8 +6,8 @@ import {
   Plus,
   Trash2,
   Loader2,
-  Power,
-  PowerOff,
+  AlertTriangle,
+  Save,
   Info,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -75,7 +75,10 @@ export function PathisView() {
   const [isAdding, setIsAdding] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingPathi, setDeletingPathi] = useState<Pathi | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
+  
+  const [localPathis, setLocalPathis] = useState<Pathi[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const effectiveCenterId = user?.role === "CENTER_ADMIN" ? user.centerId : selectedCenterId;
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
@@ -115,6 +118,11 @@ export function PathisView() {
   useEffect(() => {
     fetchPathis();
   }, [fetchPathis]);
+
+  useEffect(() => {
+    setLocalPathis(pathis);
+    setHasUnsavedChanges(false);
+  }, [pathis]);
 
   const handleAddPathi = async () => {
     if (!effectiveCenterId) {
@@ -161,60 +169,58 @@ export function PathisView() {
     }
   };
 
-  const toggleSlot = async (pathi: Pathi, slot: string) => {
-    const currentSlots = parsePathiSlots(pathi.slots);
-    const newSlots = currentSlots.includes(slot)
-      ? currentSlots.filter((s) => s !== slot)
-      : [...currentSlots, slot];
-
-    if (newSlots.length === 0) {
-      toast.error("At least one slot must be enabled");
-      return;
-    }
-
-    setTogglingId(pathi.id);
-    try {
-      const res = await fetch(`/api/pathis/${pathi.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slots: newSlots }),
-      });
-
-      if (!res.ok) {
-        toast.error("Failed to update slots");
-        return;
-      }
-
-      fetchPathis();
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setTogglingId(null);
-    }
+  const toggleSlot = (pathi: Pathi, slot: string) => {
+    setLocalPathis(prev => prev.map(p => {
+      if (p.id !== pathi.id) return p;
+      const currentSlots = parsePathiSlots(p.slots);
+      const newSlots = currentSlots.includes(slot)
+        ? currentSlots.filter((s) => s !== slot)
+        : [...currentSlots, slot];
+      return { ...p, slots: JSON.stringify(newSlots) };
+    }));
+    setHasUnsavedChanges(true);
   };
 
-  const toggleActive = async (pathi: Pathi) => {
-    setTogglingId(pathi.id);
+  const toggleActive = (pathi: Pathi) => {
+    setLocalPathis(prev => prev.map(p => {
+      if (p.id !== pathi.id) return p;
+      return { ...p, isActive: !p.isActive };
+    }));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleSaveConfigurations = async () => {
+    setIsSaving(true);
     try {
-      const res = await fetch(`/api/pathis/${pathi.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: !pathi.isActive }),
+      const changed = localPathis.filter(lp => {
+        const op = pathis.find(p => p.id === lp.id);
+        return op && (op.slots !== lp.slots || op.isActive !== lp.isActive);
       });
 
-      if (!res.ok) {
-        toast.error("Failed to update pathi status");
+      if (changed.length === 0) {
+        toast.info("No changes to save");
+        setHasUnsavedChanges(false);
         return;
       }
 
-      toast.success(
-        pathi.isActive ? "Pathi deactivated" : "Pathi activated"
-      );
+      const promises = changed.map(p => fetch(`/api/pathis/${p.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slots: parsePathiSlots(p.slots), isActive: p.isActive }),
+      }));
+
+      const results = await Promise.all(promises);
+      const failed = results.filter(r => !r.ok);
+      if (failed.length > 0) {
+        toast.error(`Failed to update ${failed.length} pathis`);
+      } else {
+        toast.success("Configurations saved successfully!");
+      }
       fetchPathis();
     } catch {
-      toast.error("Network error");
+      toast.error("Network error while saving");
     } finally {
-      setTogglingId(null);
+      setIsSaving(false);
     }
   };
 
@@ -238,7 +244,7 @@ export function PathisView() {
     }
   };
 
-  const activePathis = pathis.filter((p) => p.isActive);
+  const activePathis = localPathis.filter((p) => p.isActive);
   const totalSlotsEnabled = activePathis.reduce(
     (acc, p) => acc + parsePathiSlots(p.slots).length,
     0
@@ -256,6 +262,19 @@ export function PathisView() {
           </p>
         </div>
       </div>
+
+      {hasUnsavedChanges && (
+        <div className="sticky top-4 z-10 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <span className="text-sm font-medium text-amber-900">You have unsaved slot configurations</span>
+          </div>
+          <Button onClick={handleSaveConfigurations} disabled={isSaving} className="gap-2 bg-amber-600 hover:bg-amber-700">
+            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save Changes
+          </Button>
+        </div>
+      )}
 
       {/* Center selector for Super Admin */}
       {isSuperAdmin && (
@@ -345,7 +364,7 @@ export function PathisView() {
         </div>
       ) : (
         <div className="space-y-2">
-          {pathis.map((pathi, index) => {
+          {localPathis.map((pathi, index) => {
             const slots = parsePathiSlots(pathi.slots);
             return (
               <Card
@@ -373,7 +392,7 @@ export function PathisView() {
                             <button
                               key={slot}
                               onClick={() => toggleSlot(pathi, slot)}
-                              disabled={togglingId === pathi.id}
+                              disabled={isSaving}
                               className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
                                 isEnabled
                                   ? slotColors[slot]
@@ -393,7 +412,7 @@ export function PathisView() {
                       <Switch
                         checked={pathi.isActive}
                         onCheckedChange={() => toggleActive(pathi)}
-                        disabled={togglingId === pathi.id}
+                        disabled={isSaving}
                         title={pathi.isActive ? "Deactivate" : "Activate"}
                       />
                       <Button
