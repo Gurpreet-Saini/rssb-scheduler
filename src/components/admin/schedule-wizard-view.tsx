@@ -587,7 +587,7 @@ export function ScheduleWizardView() {
                 <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wider">
                   Satsang Ghars ({schedule.ghars.length})
                 </h3>
-                <div className="space-y-4">
+                <div className="scrollable-panel max-h-[600px] space-y-4 pr-1">
                   {schedule.ghars.map((ghar) => (
                     <SatsangGharCard key={ghar.srNo} ghar={ghar} />
                   ))}
@@ -1083,6 +1083,12 @@ export function ScheduleWizardView() {
 
           <AnalyticsDashboard schedule={generatedSchedule} />
           <ScheduleTable schedule={generatedSchedule} />
+          <Separator />
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={handleBack} className="gap-2">
+              <ChevronLeft className="h-4 w-4" /> Back to Configure
+            </Button>
+          </div>
         </div>
       )}
 

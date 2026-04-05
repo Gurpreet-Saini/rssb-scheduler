@@ -380,3 +380,21 @@ Stage Summary:
   - Shows "Avail X/Y" counter per pathi row
   - Reset All Exclusions button
   - Exclusion data persisted with saved reports
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Add scrolling for ghar cards, fix step navigation, equal per-center distribution
+
+Work Log:
+- Added scrollable container (max-h-[600px]) for ghar cards list in Step 1
+- Added "Back to Configure" button in Step 3 for back-and-forth navigation
+- Updated pathi-engine.ts with gharSlotCounts: per-slot per-ghar assignment tracking
+- Modified pickPathiBalanced() with secondary per-center balance: after filtering by global minimum, further filters by per-ghar minimum to ensure equal distribution across all centers
+- All 4 slot callers (A/B/C/D) now increment gharSlotCounts after assignment
+- Built and deployed successfully
+
+Stage Summary:
+- Step 1 ghars list now scrollable with custom scrollbar
+- Navigation: Step 1 ↔ Step 2 ↔ Step 3 all have back/forward buttons
+- Pathi distribution now balanced both globally AND per-center

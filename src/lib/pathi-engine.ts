@@ -166,6 +166,19 @@ export function assignPathis(
     }
   }
 
+  // Per-slot PER-GHAR assignment counts for equal distribution across centers
+  // Key format: "slot|gharName" → Record<pathiName, count>
+  const gharSlotCounts: Record<string, Record<string, number>> = {};
+  for (const slot of ["A", "B", "C", "D"]) {
+    for (const ghar of schedule.ghars) {
+      const key = slot + "|" + ghar.name;
+      gharSlotCounts[key] = {};
+      for (const pathi of pathis) {
+        gharSlotCounts[key][pathi] = 0;
+      }
+    }
+  }
+
   // Per-slot rotation indices for deterministic tiebreaking
   const slotRotation: Record<string, number> = { A: 0, B: 0, C: 0, D: 0 };
 
@@ -225,26 +238,30 @@ export function assignPathis(
 
       // Slot-A: only for live sessions (not VCD)
       if (!isVCD) {
-        assignedA = pickPathiBalanced(slotCounts["A"], pathis, bookedForDate, slotRotation, "A", pathiSlots, pathiExcludedGhars, de.gharName);
+        assignedA = pickPathiBalanced(slotCounts["A"], pathis, bookedForDate, slotRotation, "A", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
         bookedForDate.add(assignedA); // Person is now at this place — cannot go anywhere else today
         slotCounts["A"][assignedA]++;
+        gharSlotCounts["A|" + de.gharName][assignedA]++;
       }
 
       // Slot-B: for all sessions (including VCD)
-      assignedB = pickPathiBalanced(slotCounts["B"], pathis, bookedForDate, slotRotation, "B", pathiSlots, pathiExcludedGhars, de.gharName);
+      assignedB = pickPathiBalanced(slotCounts["B"], pathis, bookedForDate, slotRotation, "B", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
       bookedForDate.add(assignedB); // Person cannot go anywhere else today
       slotCounts["B"][assignedB]++;
+      gharSlotCounts["B|" + de.gharName][assignedB]++;
 
       // Slot-C: for all sessions (including VCD)
-      assignedC = pickPathiBalanced(slotCounts["C"], pathis, bookedForDate, slotRotation, "C", pathiSlots, pathiExcludedGhars, de.gharName);
+      assignedC = pickPathiBalanced(slotCounts["C"], pathis, bookedForDate, slotRotation, "C", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
       bookedForDate.add(assignedC);
       slotCounts["C"][assignedC]++;
+      gharSlotCounts["C|" + de.gharName][assignedC]++;
 
       // Slot-D: only for Baal Satsang ghars
       if (de.hasBaalSatsang) {
-        assignedD = pickPathiBalanced(slotCounts["D"], pathis, bookedForDate, slotRotation, "D", pathiSlots, pathiExcludedGhars, de.gharName);
+        assignedD = pickPathiBalanced(slotCounts["D"], pathis, bookedForDate, slotRotation, "D", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
         bookedForDate.add(assignedD);
         slotCounts["D"][assignedD]++;
+        gharSlotCounts["D|" + de.gharName][assignedD]++;
       }
 
       flatEntries.push({
@@ -279,6 +296,9 @@ export function assignPathis(
  * Pick the pathi with fewest assignments in the given slot,
  * excluding any already booked for ANY slot at ANY ghar on this date.
  * Uses deterministic rotation for tiebreaking to ensure strict equal distribution.
+ *
+ * Per-center balance: When gharSlotCounts is provided, prefers pathis with fewer
+ * assignments to THIS specific ghar, ensuring equal distribution across all centers.
  */
 function pickPathiBalanced(
   counts: Record<string, number>,
@@ -288,7 +308,8 @@ function pickPathiBalanced(
   slotName: string,
   pathiSlots?: Record<string, string[]>,
   pathiExcludedGhars?: Record<string, string[]>,
-  currentGharName?: string
+  currentGharName?: string,
+  gharSlotCounts?: Record<string, Record<string, number>>
 ): string {
   // First filter: exclude pathis already assigned ANYWHERE on this date
   let available = pathis.filter((p) => !bookedForDate.has(p));
@@ -317,8 +338,24 @@ function pickPathiBalanced(
     return sorted[0];
   }
 
+  // PRIMARY: prefer pathis with fewest global slot assignments
   const minCount = Math.min(...available.map((p) => counts[p] ?? 0));
-  const candidates = available.filter((p) => (counts[p] ?? 0) === minCount);
+  let candidates = available.filter((p) => (counts[p] ?? 0) === minCount);
+
+  // SECONDARY (per-center balance): among globally-least candidates,
+  // prefer pathis with fewer assignments to THIS specific ghar.
+  // This ensures equal distribution across all centers, not just globally.
+  if (candidates.length > 1 && gharSlotCounts && currentGharName) {
+    const gharKey = slotName + "|" + currentGharName;
+    const gharCounts = gharSlotCounts[gharKey];
+    if (gharCounts) {
+      const minGharCount = Math.min(...candidates.map((p) => gharCounts[p] ?? 0));
+      const gharBalanced = candidates.filter((p) => (gharCounts[p] ?? 0) === minGharCount);
+      if (gharBalanced.length > 0) {
+        candidates = gharBalanced;
+      }
+    }
+  }
 
   if (candidates.length === 1) {
     return candidates[0];
