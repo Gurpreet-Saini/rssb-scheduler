@@ -189,14 +189,14 @@ export function ScheduleWizardView() {
   }, [isSuperAdmin, setCenters]);
 
   useEffect(() => {
-    const cid = effectiveCenterId || selectedCenterId;
+    const cid = user?.role === "CENTER_ADMIN" ? user.centerId : (effectiveCenterId || selectedCenterId);
     if (cid) {
       fetch(`/api/pathis?centerId=${cid}`)
         .then((res) => res.json())
         .then((data) => setPathis(data.pathis || []))
         .catch(() => {});
     }
-  }, [effectiveCenterId, selectedCenterId, setPathis]);
+  }, [effectiveCenterId, selectedCenterId, setPathis, user]);
 
   // Sync store state
   useEffect(() => {
@@ -389,7 +389,7 @@ export function ScheduleWizardView() {
 
   const handleSaveReport = async () => {
     if (!generatedSchedule || !reportName.trim()) return;
-    const cid = effectiveCenterId || selectedCenterId;
+    const cid = user?.role === "CENTER_ADMIN" ? user.centerId : (effectiveCenterId || selectedCenterId);
     if (!cid) {
       toast.error("No center selected");
       return;
