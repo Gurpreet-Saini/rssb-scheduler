@@ -39,10 +39,12 @@ export async function POST(request: NextRequest) {
     if (response) return response;
 
     const body = await request.json();
-    const { name, centerId, slots } = body;
+    const { name, names, centerId, slots } = body;
 
-    if (!name || !centerId) {
-      return NextResponse.json({ error: 'Name and centerId are required' }, { status: 400 });
+    const pathiNames = names && Array.isArray(names) ? names : (name ? [name] : []);
+
+    if (pathiNames.length === 0 || !centerId) {
+      return NextResponse.json({ error: 'Name(s) and centerId are required' }, { status: 400 });
     }
 
     // CENTER_ADMIN can only create pathis for their own center
@@ -56,15 +58,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Center not found' }, { status: 400 });
     }
 
-    const pathi = await db.pathi.create({
-      data: {
-        name,
-        centerId,
-        slots: slots ? JSON.stringify(slots) : '["A","B","C"]',
-      },
+    const data = pathiNames.map((n: string) => ({
+      name: n,
+      centerId,
+      slots: slots ? JSON.stringify(slots) : '["A","B","C"]',
+    }));
+
+    const result = await db.pathi.createMany({
+      data,
     });
 
-    return NextResponse.json({ pathi }, { status: 201 });
+    return NextResponse.json({ count: result.count }, { status: 201 });
   } catch (error) {
     console.error('Create pathi error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -133,31 +133,26 @@ export function PathisView() {
     }
 
     setIsAdding(true);
-    let successCount = 0;
     try {
-      for (const name of namesToAdd) {
-        const res = await fetch("/api/pathis", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name,
-            centerId: effectiveCenterId,
-            slots: ["A", "B", "C"],
-          }),
-        });
+      const res = await fetch("/api/pathis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          names: namesToAdd,
+          centerId: effectiveCenterId,
+          slots: ["A", "B", "C"],
+        }),
+      });
 
-        if (res.ok) {
-          successCount++;
-        } else {
-          const data = await res.json();
-          toast.error(data.error || `Failed to add ${name}`);
-        }
-      }
-
-      if (successCount > 0) {
+      if (res.ok) {
+        const data = await res.json();
+        const successCount = data.count || namesToAdd.length;
         toast.success(`Added ${successCount} pathi${successCount > 1 ? 's' : ''}`);
         setNewPathiName("");
         fetchPathis();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || "Failed to add pathis");
       }
     } catch {
       toast.error("Network error");
