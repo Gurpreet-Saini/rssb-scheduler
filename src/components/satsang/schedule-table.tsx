@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   Download, Filter, ChevronDown, ChevronRight, MapPin,
 } from "lucide-react";
@@ -100,7 +100,7 @@ function parseDateSortable(dateStr: string): string {
   return dateStr;
 }
 
-export function ScheduleTable({ schedule }: ScheduleTableProps) {
+export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: ScheduleTableProps) {
   const [placeFilter, setPlaceFilter] = useState<string>("all");
   const [expandedCenters, setExpandedCenters] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
@@ -432,4 +432,4 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
       </CardContent>
     </Card>
   );
-}
+});

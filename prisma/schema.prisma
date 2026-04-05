@@ -20,6 +20,8 @@ model User {
   updatedAt   DateTime @updatedAt
 
   savedSchedules SavedSchedule[]
+
+  @@index([centerId])
 }
 
 model Center {
@@ -29,8 +31,8 @@ model Center {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users    User[]
-  pathis   Pathi[]
+  users          User[]
+  pathis         Pathi[]
   savedSchedules SavedSchedule[]
 }
 
@@ -43,19 +45,21 @@ model Pathi {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([centerId])
 }
 
 model SavedSchedule {
-  id            String   @id @default(uuid())
-  name          String
-  centerId      String
-  center        Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  scheduleData  String   // JSON - the full GeneratedSchedule data
-  pathiConfig   String   // JSON - the pathis and baalSatsangGhars used
-  excelData     String?  // JSON - original parsed Excel data (optional, for regeneration)
-  createdAt     DateTime @default(now())
+  id           String   @id @default(uuid())
+  name         String
+  centerId     String
+  center       Center   @relation(fields: [centerId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduleData String // JSON - the full GeneratedSchedule data
+  pathiConfig  String // JSON - the pathis and baalSatsangGhars used
+  excelData    String? // JSON - original parsed Excel data (optional, for regeneration)
+  createdAt    DateTime @default(now())
 
   @@index([centerId])
   @@index([userId])
