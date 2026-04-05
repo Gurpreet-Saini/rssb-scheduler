@@ -35,6 +35,8 @@ export interface SavedSchedule {
   scheduleData: string;
   pathiConfig: string;
   excelData?: string | null;
+  shareToken?: string | null;
+  isPublic?: boolean;
   user?: { id: string; username: string; displayName: string };
 }
 

@@ -4,6 +4,9 @@ import {
   BarChart3, Users, Calendar, Video, Mic, Star,
   AlertTriangle, CheckCircle2, MinusCircle, ShieldCheck,
 } from "lucide-react";
+import { 
+  BarChart as RechartsBarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid 
+} from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -145,75 +148,43 @@ export function AnalyticsDashboard({ schedule }: AnalyticsDashboardProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="scrollable-panel max-h-[400px]">
-            <div className="space-y-3 p-6">
-              {metrics.slotMetrics
-                .filter((s) => s.slot !== "D" || hasAnyBaalSatsang)
-                .map((slot) => {
-                  const counts = schedule.config.pathis.map((p) => slot.assignments[p] || 0);
-                  const maxCount = Math.max(...counts, 1);
-                  const minCount = Math.min(...counts);
-                  const range = maxCount - minCount;
-
-                  return (
-                    <div
-                      key={slot.slot}
-                      className={`rounded-lg border p-3 space-y-2.5 ${slotBgColors[slot.slot]} ${slotBorderColors[slot.slot]}`}
-                    >
-                      {/* Slot header row */}
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <Badge className={`${slotLabelColors[slot.slot]} text-xs px-2 py-0.5 border-0 font-bold`}>
-                            Slot-{slot.slot}
-                          </Badge>
-                          <span className="text-xs font-medium text-muted-foreground">
-                            {slot.total} assignments
-                          </span>
-                          <span className="text-[10px] text-muted-foreground">
-                            (avg {slot.average.toFixed(1)}/pathi · spread {range})
-                          </span>
-                        </div>
-                        <BalanceIndicator stdDev={slot.stdDev} average={slot.average} />
-                      </div>
-
-                      {/* Bar chart with labels */}
-                      <div className="flex items-end gap-2">
-                        {schedule.config.pathis.map((pathi) => {
-                          const count = slot.assignments[pathi] || 0;
-                          const height = Math.max((count / maxCount) * 100, 8);
-                          return (
-                            <div
-                              key={`${slot.slot}-${pathi}`}
-                              className="flex-1 flex flex-col items-center gap-1"
-                              title={`${pathi}: ${count} assignments in Slot-${slot.slot}`}
-                            >
-                              <span className="text-[10px] font-bold text-foreground">{count}</span>
-                              <div
-                                className="w-full rounded-t-md transition-all duration-300 hover:opacity-80"
-                                style={{ height: `${Math.max(height, 10)}%`, minHeight: "4px" }}
-                              >
-                                <div className={`w-full h-full rounded-t-md ${slotBarColors[slot.slot]}`} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Pathi names under bars */}
-                      <div className="flex gap-2">
-                        {schedule.config.pathis.map((pathi) => (
-                          <div key={pathi} className="flex-1 text-center">
-                            <span className="text-[9px] text-muted-foreground truncate block" title={pathi}>
-                              {pathi.length > 8 ? pathi.substring(0, 7) + "…" : pathi}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
+          <div className="px-4 py-6 w-full h-[450px]">
+             <ResponsiveContainer width="100%" height="100%">
+                <RechartsBarChart
+                  data={metrics.pathiDetails}
+                  margin={{ top: 20, right: 30, left: 0, bottom: 50 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                  <XAxis 
+                    dataKey="pathiName" 
+                    angle={-45} 
+                    textAnchor="end" 
+                    interval={0} 
+                    tick={{fontSize: 11, fill: '#6B7280'}}
+                    tickMargin={8}
+                    height={70}
+                  />
+                  <YAxis 
+                    tick={{fontSize: 12, fill: '#6B7280'}} 
+                    axisLine={false} 
+                    tickLine={false} 
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                     contentStyle={{borderRadius: '8px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                     cursor={{ fill: 'transparent' }} 
+                  />
+                  <Legend wrapperStyle={{paddingTop: '20px'}} />
+                  <Bar dataKey="slotA" name="Slot A" stackId="a" fill="#38BDF8" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="slotB" name="Slot B" stackId="a" fill="#34D399" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="slotC" name="Slot C" stackId="a" fill="#FBBF24" radius={[0, 0, 0, 0]} />
+                  {hasAnyBaalSatsang && (
+                    <Bar dataKey="slotD" name="Slot D" stackId="a" fill="#C084FC" radius={[4, 4, 0, 0]} />
+                  )}
+                </RechartsBarChart>
+              </ResponsiveContainer>
           </div>
+
         </CardContent>
       </Card>
 

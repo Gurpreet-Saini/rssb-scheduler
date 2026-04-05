@@ -20,6 +20,7 @@ model User {
   updatedAt   DateTime @updatedAt
 
   savedSchedules SavedSchedule[]
+  auditLogs      AuditLog[]
 
   @@index([centerId])
 }
@@ -59,8 +60,27 @@ model SavedSchedule {
   scheduleData String // JSON - the full GeneratedSchedule data
   pathiConfig  String // JSON - the pathis and baalSatsangGhars used
   excelData    String? // JSON - original parsed Excel data (optional, for regeneration)
+  shareToken   String?  @unique // For public sharing
+  isPublic     Boolean  @default(false)
   createdAt    DateTime @default(now())
 
   @@index([centerId])
   @@index([userId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String // e.g., 'GENERATED_SCHEDULE', 'DELETED_REPORT', 'CREATED_PATHI'
+  entityId    String? // Optional ID of the item affected
+  entityType  String? // e.g., 'SavedSchedule', 'Pathi', 'Center'
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  centerId    String?
+  description String
+  metadata    String? // JSON string containing extra details before/after
+  createdAt   DateTime @default(now())
+
+  @@index([centerId])
+  @@index([userId])
+  @@index([createdAt])
 }

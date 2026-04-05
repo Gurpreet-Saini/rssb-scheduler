@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
 import { assignPathis, calculateMinPathis } from "@/lib/pathi-engine";
 import {
   GenerateScheduleResponse,
@@ -7,7 +8,7 @@ import {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { scheduleData, pathis, baalSatsangGhars, pathiSlots, pathiExcludedGhars } = body;
+    const { scheduleData, pathis, baalSatsangGhars, pathiSlots, pathiExcludedGhars, centerId } = body;
 
     if (!scheduleData || !scheduleData.ghars || scheduleData.ghars.length === 0) {
       return NextResponse.json(
@@ -48,9 +49,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the config object
-    const config: { pathis: string[]; baalSatsangGhars: string[]; pathiSlots?: Record<string, string[]>; pathiExcludedGhars?: Record<string, string[]> } = {
+    const config: { 
+      pathis: string[]; 
+      baalSatsangGhars: string[]; 
+      pathiSlots?: Record<string, string[]>; 
+      pathiExcludedGhars?: Record<string, string[]>;
+      historicalCounts?: Record<string, number>;
+    } = {
       pathis: uniquePathis,
-      baalSatsangGhars,
+      baalSatsangGhars: baalSatsangGhars as string[],
     };
 
     // Only include pathiSlots if provided and non-empty
@@ -61,6 +68,35 @@ export async function POST(request: NextRequest) {
     // Only include pathiExcludedGhars if provided and non-empty
     if (pathiExcludedGhars && typeof pathiExcludedGhars === "object" && Object.keys(pathiExcludedGhars).length > 0) {
       config.pathiExcludedGhars = pathiExcludedGhars;
+    }
+
+    // Tally Historical Data (Last 90 days)
+    let historicalCounts: Record<string, number> = {};
+    if (centerId) {
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - 90);
+      
+      const historicalSchedules = await db.savedSchedule.findMany({
+        where: {
+          centerId,
+          createdAt: { gte: pastDate }
+        },
+        select: { scheduleData: true }
+      });
+
+      for (const sched of historicalSchedules) {
+        try {
+          const parsed = JSON.parse(sched.scheduleData);
+          if (parsed && parsed.metrics && parsed.metrics.pathiDetails) {
+            for (const p of parsed.metrics.pathiDetails) {
+              historicalCounts[p.pathiName] = (historicalCounts[p.pathiName] || 0) + p.total;
+            }
+          }
+        } catch (e) {}
+      }
+      if (Object.keys(historicalCounts).length > 0) {
+        config.historicalCounts = historicalCounts;
+      }
     }
 
     // Calculate validation info

@@ -33,7 +33,7 @@ import { SatsangGharCard } from "@/components/satsang/satsang-ghar-card";
 import { StepIndicator } from "@/components/satsang/step-indicator";
 import { ScheduleTable } from "@/components/satsang/schedule-table";
 import { AnalyticsDashboard } from "@/components/satsang/analytics-dashboard";
-import { useAppStore, type Pathi, type GeneratedSchedule as GS } from "@/lib/store";
+import { useAppStore, type Pathi } from "@/lib/store";
 import { SatsangSchedule } from "@/lib/excel-parser";
 import { GeneratedSchedule, WizardStep } from "@/lib/types";
 import { toast } from "sonner";
@@ -322,6 +322,7 @@ export function ScheduleWizardView() {
           pathis: pathiNames,
           baalSatsangGhars,
           pathiSlots,
+          centerId: effectiveCenterId,
           pathiExcludedGhars: pathiGharExclusions,
         }),
       });
@@ -674,10 +675,13 @@ export function ScheduleWizardView() {
                 {ALL_SLOTS.map((slot) => {
                   const isEnabled = wizardSlotToggles[slot];
                   return (
-                    <button
+                    <div
                       key={slot}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleGlobalSlotToggle(slot)}
-                      className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleGlobalSlotToggle(slot); }}}
+                      className={`inline-flex items-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-all cursor-pointer select-none ${
                         isEnabled
                           ? `${slotColors[slot]} border-current shadow-sm scale-[1.02]`
                           : `${slotColorsInactive[slot]} border-current`
@@ -686,13 +690,9 @@ export function ScheduleWizardView() {
                       <Switch
                         checked={isEnabled}
                         className="pointer-events-none"
-                        style={{
-                          // Override switch colors to match slot
-                          // We use the native Switch component but prevent interaction
-                        }}
                       />
                       <span>{slotLabels[slot]}</span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

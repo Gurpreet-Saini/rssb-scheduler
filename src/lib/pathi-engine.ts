@@ -125,6 +125,8 @@ export interface PathiSlotConfig {
   /** Optional map: pathi name → list of ghar names to EXCLUDE from assignment.
    *  A pathi in this list will NEVER be assigned to the listed ghars. */
   pathiExcludedGhars?: Record<string, string[]>;
+  /** Optional map: pathi name -> historical previous months weight to balance */
+  historicalCounts?: Record<string, number>;
 }
 
 /**
@@ -160,9 +162,12 @@ export function assignPathis(
   const slotCounts: Record<string, Record<string, number>> = {
     A: {}, B: {}, C: {}, D: {},
   };
+  const historicalCounts = 'historicalCounts' in config ? config.historicalCounts : undefined;
+
   for (const slot of ["A", "B", "C", "D"]) {
     for (const pathi of pathis) {
-      slotCounts[slot][pathi] = 0;
+      // Seed algorithm with historical weight so under-assigned Pathis from previous months get highly prioritized organically
+      slotCounts[slot][pathi] = historicalCounts && historicalCounts[pathi] ? historicalCounts[pathi] : 0;
     }
   }
 

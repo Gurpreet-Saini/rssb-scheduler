@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/api-auth';
+import { logAudit } from '@/lib/audit';
 
 // GET /api/schedules/saved?centerId=xxx - List saved schedules for a center
 export async function GET(request: NextRequest) {
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
         name: true,
         createdAt: true,
         centerId: true,
+        shareToken: true,
+        isPublic: true,
         user: {
           select: { id: true, username: true, displayName: true },
         },
@@ -82,6 +85,15 @@ export async function POST(request: NextRequest) {
           select: { id: true, username: true, displayName: true },
         },
       },
+    });
+
+    await logAudit({
+      action: 'GENERATED_SCHEDULE',
+      entityId: schedule.id,
+      entityType: 'SavedSchedule',
+      userId: session!.userId,
+      centerId: centerId,
+      description: `Generated and saved schedule: ${name}`,
     });
 
     return NextResponse.json({ schedule }, { status: 201 });

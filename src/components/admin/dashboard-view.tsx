@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAppStore, type Center, type User } from "@/lib/store";
 import { toast } from "sonner";
+import { DashboardCalendar } from "./dashboard-calendar";
 
 export function DashboardView() {
   const user = useAppStore((s) => s.user);
@@ -38,7 +39,6 @@ export function DashboardView() {
       try {
         const centersRes = await fetch("/api/centers");
         if (cancelled) return;
-
         if (centersRes.ok) {
           const cData = await centersRes.json();
           setCenters(cData.centers || []);
@@ -50,6 +50,21 @@ export function DashboardView() {
     load();
     return () => { cancelled = true; };
   }, [setCenters]);
+
+  // Load saved schedules for calendar
+  useEffect(() => {
+    let cancelled = false;
+    const loadSchedules = async () => {
+      try {
+        const res = await fetch("/api/schedules/saved");
+        if (cancelled || !res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setSavedSchedules(data.schedules || []);
+      } catch {}
+    };
+    loadSchedules();
+    return () => { cancelled = true; };
+  }, [setSavedSchedules]);
 
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -214,6 +229,12 @@ export function DashboardView() {
           ))}
         </div>
       </div>
+
+      {/* Schedule Calendar */}
+      <DashboardCalendar
+        savedSchedules={savedSchedules}
+        onViewReports={() => setCurrentView("saved-reports")}
+      />
 
       {/* Centers Overview for Super Admin */}
       {isSuperAdmin && centers.length > 0 && (

@@ -8,6 +8,8 @@ import {
   Eye,
   Download,
   Calendar,
+  Link as LinkIcon,
+  Copy,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -177,6 +179,34 @@ export function SavedReportsView() {
     }
   };
 
+  const handleShareLink = async (schedule: SavedSchedule) => {
+    try {
+      const isCurrentlyPublic = schedule.isPublic;
+      const res = await fetch(`/api/schedules/saved/${schedule.id}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPublic: !isCurrentlyPublic }),
+      });
+      if (!res.ok) throw new Error("Failed to update share link");
+      const data = await res.json();
+      
+      // Update local state instead of refetching
+      setSavedSchedules(savedSchedules.map(s => 
+        s.id === schedule.id ? { ...s, isPublic: data.isPublic, shareToken: data.shareToken } : s
+      ));
+      
+      if (data.isPublic && data.shareToken) {
+        const url = `${window.location.origin}/shared/${data.shareToken}`;
+        await navigator.clipboard.writeText(url);
+        toast.success("Share link copied to clipboard!");
+      } else {
+        toast.success("Share link revoked.");
+      }
+    } catch {
+      toast.error("Network error");
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString("en-US", {
@@ -276,6 +306,11 @@ export function SavedReportsView() {
                           <Calendar className="h-3.5 w-3.5 text-purple-600" />
                         </div>
                         <span className="text-sm font-medium">{s.name}</span>
+                        {s.isPublic && (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0 h-4 border-0">
+                            Shared
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     {!isSuperAdmin && (
@@ -309,6 +344,23 @@ export function SavedReportsView() {
                           ) : (
                             <Download className="h-3.5 w-3.5" />
                           )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-8 w-8 ${s.isPublic ? 'text-blue-600 hover:text-blue-700 hover:bg-blue-50' : 'text-gray-400 hover:text-blue-600'}`}
+                          title={s.isPublic ? "Copy active share link" : "Generate public link"}
+                          onClick={async () => {
+                            if (s.isPublic && s.shareToken) {
+                              const url = `${window.location.origin}/shared/${s.shareToken}`;
+                              await navigator.clipboard.writeText(url);
+                              toast.success("Share link copied!");
+                            } else {
+                              handleShareLink(s);
+                            }
+                          }}
+                        >
+                          {s.isPublic ? <Copy className="h-3.5 w-3.5" /> : <LinkIcon className="h-3.5 w-3.5" />}
                         </Button>
                         <Button
                           variant="ghost"

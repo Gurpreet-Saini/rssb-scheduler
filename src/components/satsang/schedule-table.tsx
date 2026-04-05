@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
+import * as XLSX from "xlsx";
 import {
-  Download, Filter, ChevronDown, ChevronRight, MapPin,
+  Download, Filter, ChevronDown, ChevronRight, MapPin, Printer
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAppStore } from "@/lib/store";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -15,9 +17,11 @@ import {
 } from "@/components/ui/select";
 import { GeneratedSchedule } from "@/lib/types";
 import { toast } from "sonner";
+import { CalendarView } from "./calendar-view";
 
 interface ScheduleTableProps {
   schedule: GeneratedSchedule;
+  readOnly?: boolean;
 }
 
 const categoryColors: Record<string, string> = {
@@ -45,19 +49,6 @@ const categoryIconBg: Record<string, string> = {
   C: "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300",
 };
 
-function pathiBadge(value: string, slot: string) {
-  if (!value || value === "N/A") {
-    return <span className="text-muted-foreground text-xs italic">{value || "—"}</span>;
-  }
-  return (
-    <Badge
-      variant="outline"
-      className={`text-[11px] font-medium px-2 py-0.5 border whitespace-nowrap ${slotColors[slot] || "border-gray-300 dark:border-gray-700"}`}
-    >
-      {value}
-    </Badge>
-  );
-}
 
 /** Parse "03-May" → "2026-05-03" for sorting */
 function parseDateSortable(dateStr: string): string {
@@ -68,14 +59,11 @@ function parseDateSortable(dateStr: string): string {
   };
   const parts = dateStr.trim().split(/[\s-]+/);
   if (parts.length === 2) {
-    // Could be "03 May" or "03-May"
     let day: string, month: string;
-    // Check if first part is a number (day) and second is month
     if (/^\d+$/.test(parts[0]) && months[parts[1]]) {
       day = parts[0].padStart(2, "0");
       month = months[parts[1]];
     } else if (/^\d+$/.test(parts[1]) && months[parts[0]]) {
-      // "May 03" format
       day = parts[1].padStart(2, "0");
       month = months[parts[0]];
     } else {
@@ -83,7 +71,6 @@ function parseDateSortable(dateStr: string): string {
     }
     return `2026-${month}-${day}`;
   }
-  // Try "03 May 2026" or "03-May-2026" format
   if (parts.length === 3) {
     let day: string, month: string;
     if (/^\d+$/.test(parts[0]) && months[parts[1]]) {
@@ -100,10 +87,103 @@ function parseDateSortable(dateStr: string): string {
   return dateStr;
 }
 
-export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: ScheduleTableProps) {
+export const ScheduleTable = React.memo(function ScheduleTable({ schedule, readOnly = false }: ScheduleTableProps) {
+  const [viewMode, setViewMode] = useState<"table" | "calendar">("table");
   const [placeFilter, setPlaceFilter] = useState<string>("all");
   const [expandedCenters, setExpandedCenters] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
+  
+  const setGeneratedSchedule = useAppStore(state => state.setGeneratedSchedule);
+
+  const handleDragStart = useCallback((e: React.DragEvent, pathiName: string, date: string, gharName: string, slotKey: string) => {
+    if (readOnly || pathiName === "N/A" || !pathiName) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.setData("application/json", JSON.stringify({ pathiName, date, gharName, slotKey }));
+    e.dataTransfer.effectAllowed = "move";
+  }, [readOnly]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (readOnly) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  }, [readOnly]);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetDate: string, targetGhar: string, targetSlotKey: string) => {
+    if (readOnly) return;
+    e.preventDefault();
+    try {
+      const dataStr = e.dataTransfer.getData("application/json");
+      if (!dataStr) return;
+      const data = JSON.parse(dataStr);
+      if (!data || !data.pathiName) return;
+
+      const { pathiName, date: sourceDate, gharName: sourceGhar, slotKey: sourceSlot } = data;
+
+      // Avoid self-drop
+      if (sourceDate === targetDate && sourceGhar === targetGhar && sourceSlot === targetSlotKey) return;
+
+      // Clash Engine: Check if Pathi is at a DIFFERENT center on same date
+      const entriesForDate = schedule.entries.filter(en => en.entry.date === targetDate);
+      const isAlreadyOnDateAtDifferentPlace = entriesForDate.some(en => {
+        if (en.gharName === targetGhar) return false;
+        return [en.pathiA, en.pathiB, en.pathiC, en.pathiD].includes(pathiName);
+      });
+
+      if (isAlreadyOnDateAtDifferentPlace) {
+        toast.error(`Clash Error: ${pathiName} is already assigned to a different Center on ${targetDate}.`);
+        return;
+      }
+
+      // Mutate
+      const newEntries = [...schedule.entries];
+      const sourceIdx = newEntries.findIndex(en => en.entry.date === sourceDate && en.gharName === sourceGhar);
+      const targetIdx = newEntries.findIndex(en => en.entry.date === targetDate && en.gharName === targetGhar);
+
+      if (sourceIdx === -1 || targetIdx === -1) return;
+
+      const targetEntry = newEntries[targetIdx];
+      const swappedPathi = targetEntry[targetSlotKey as keyof typeof targetEntry];
+
+      newEntries[sourceIdx] = { ...newEntries[sourceIdx], [sourceSlot]: swappedPathi };
+      newEntries[targetIdx] = { ...newEntries[targetIdx], [targetSlotKey]: pathiName };
+
+      setGeneratedSchedule({ ...schedule, entries: newEntries });
+      toast.success(`Swapped ${pathiName} successfully`);
+      
+    } catch (err) {}
+  }, [readOnly, schedule, setGeneratedSchedule]);
+
+  const renderDraggableBadge = useCallback((value: string, slot: string, date: string, gharName: string, slotKey: string) => {
+    if (!value || value === "N/A") {
+      return (
+        <div 
+          onDragOver={handleDragOver} 
+          onDrop={(e) => handleDrop(e, date, gharName, slotKey)}
+          className="h-full w-full min-h-[24px] flex items-center justify-center rounded border border-dashed border-transparent hover:border-gray-300 transition-colors cursor-pointer"
+        >
+          <span className="text-muted-foreground/30 text-[10px] italic">—</span>
+        </div>
+      );
+    }
+    return (
+      <div
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, date, gharName, slotKey)}
+        className="p-1 rounded hover:bg-gray-100 transition-colors"
+      >
+        <Badge
+          draggable={!readOnly}
+          onDragStart={(e) => handleDragStart(e, value, date, gharName, slotKey)}
+          variant="outline"
+          className={`text-[11px] font-medium px-2 py-0.5 border whitespace-nowrap cursor-grab active:cursor-grabbing ${slotColors[slot] || "border-gray-300 dark:border-gray-700"}`}
+        >
+          {value}
+        </Badge>
+      </div>
+    );
+  }, [readOnly, handleDragStart, handleDragOver, handleDrop]);
 
   const hasAnyBaalSatsang = useMemo(
     () => schedule.entries.some((e) => e.hasBaalSatsang),
@@ -115,15 +195,12 @@ export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: Sch
     [schedule.entries]
   );
 
-  // Group entries by CENTER, sorted by category then name
-  // Within each center, sort entries by date chronologically
   const groupedByCenter = useMemo(() => {
     const filteredEntries =
       placeFilter === "all"
         ? schedule.entries
         : schedule.entries.filter((e) => e.gharName === placeFilter);
 
-    // Group by center (gharName)
     const centerMap: Map<string, {
       category: string;
       entries: typeof schedule.entries;
@@ -136,7 +213,6 @@ export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: Sch
       centerMap.get(entry.gharName)!.entries.push(entry);
     }
 
-    // Sort entries within each center by date (chronologically)
     for (const [, center] of centerMap) {
       center.entries.sort((a, b) => {
         const dc = parseDateSortable(a.entry.date).localeCompare(parseDateSortable(b.entry.date));
@@ -145,7 +221,6 @@ export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: Sch
       });
     }
 
-    // Sort centers: SP → SC → C, then alphabetically
     const sortedCenters = [...centerMap.entries()]
       .map(([name, data]) => ({
         name,
@@ -164,8 +239,6 @@ export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: Sch
 
   const centerKeys = useMemo(() => groupedByCenter.map((g) => g.name), [groupedByCenter]);
 
-  // Derive expanded set: auto-expand when filtering to a single center,
-  // or when showAll is true, otherwise use manual expandedCenters state.
   const expandedSet = useMemo(() => {
     if (showAll) return new Set(centerKeys);
     if (placeFilter !== "all") return new Set([placeFilter]);
@@ -193,40 +266,46 @@ export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: Sch
 
   const isAllExpanded = centerKeys.length > 0 && centerKeys.every((k) => expandedSet.has(k));
 
-  const exportCSV = useCallback(() => {
-    const header = hasAnyBaalSatsang
-      ? "Date,Time,Place,Category,SK,Shabad,Bani,Book,Pathi-A,Pathi-B,Pathi-C,Pathi-D"
-      : "Date,Time,Place,Category,SK,Shabad,Bani,Book,Pathi-A,Pathi-B,Pathi-C";
-    const rows = [header];
-    function csvEscape(s: string): string {
-      if (s.includes(",") || s.includes('"')) return '"' + s.replace(/"/g, '""') + '"';
-      return s;
-    }
-    // Export: sorted by center, then by date within center
+  const exportXLSX = useCallback(() => {
+    const headerRow = hasAnyBaalSatsang
+      ? ["Date", "Time", "Place", "Category", "SK", "Shabad", "Bani", "Book", "Pathi-A", "Pathi-B", "Pathi-C", "Pathi-D"]
+      : ["Date", "Time", "Place", "Category", "SK", "Shabad", "Bani", "Book", "Pathi-A", "Pathi-B", "Pathi-C"];
+      
     const sorted = [...schedule.entries].sort((a, b) => {
-      const placeComp = a.gharName.localeCompare(b.gharName);
-      if (placeComp !== 0) return placeComp;
       const dc = parseDateSortable(a.entry.date).localeCompare(parseDateSortable(b.entry.date));
       if (dc !== 0) return dc;
+      const placeComp = a.gharName.localeCompare(b.gharName);
+      if (placeComp !== 0) return placeComp;
       return a.entry.time.localeCompare(b.entry.time);
     });
+
+    const worksheetData = [headerRow];
+    
     for (const e of sorted) {
-      const base = [
-        csvEscape(e.entry.date), csvEscape(e.entry.time), csvEscape(e.gharName), csvEscape(e.gharCategory),
-        csvEscape(e.entry.nameOfSK), csvEscape(e.entry.shabad), csvEscape(e.entry.bani), csvEscape(e.entry.book),
-        csvEscape(e.pathiA), csvEscape(e.pathiB), csvEscape(e.pathiC),
+      const row = [
+        e.entry.date, e.entry.time, e.gharName, e.gharCategory,
+        e.entry.nameOfSK, e.entry.shabad, e.entry.bani, e.entry.book,
+        e.pathiA !== "N/A" ? e.pathiA : "", 
+        e.pathiB !== "N/A" ? e.pathiB : "", 
+        e.pathiC !== "N/A" ? e.pathiC : "",
       ];
-      if (hasAnyBaalSatsang) base.push(csvEscape(e.pathiD));
-      rows.push(base.join(","));
+      if (hasAnyBaalSatsang) {
+        row.push(e.pathiD !== "N/A" ? e.pathiD : "");
+      }
+      worksheetData.push(row);
     }
-    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "satsang_schedule_with_pathis.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV exported (sorted by center, then date)");
+    
+    const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+    
+    ws['!cols'] = headerRow.map((_, i) => ({ 
+      wch: Math.min(Math.max(...worksheetData.map(r => String(r[i] || "").length)) + 2, 50) 
+    }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Satsang Schedule");
+    
+    XLSX.writeFile(wb, "Satsang_Schedule.xlsx");
+    toast.success("Excel (.xlsx) exported successfully!");
   }, [schedule.entries, hasAnyBaalSatsang]);
 
   const slotLegend = (
@@ -264,7 +343,25 @@ export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: Sch
               {schedule.entries.length} entries · {centerKeys.length} centers
             </Badge>
           </div>
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-md border border-gray-200">
+              <Button
+                variant={viewMode === "table" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                className={`h-7 px-3 text-xs ${viewMode === "table" ? "bg-white shadow-sm" : "hover:bg-gray-200/50"}`}
+              >
+                Table
+              </Button>
+              <Button
+                variant={viewMode === "calendar" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("calendar")}
+                className={`h-7 px-3 text-xs ${viewMode === "calendar" ? "bg-white shadow-sm" : "hover:bg-gray-200/50"}`}
+              >
+                Calendar
+              </Button>
+            </div>
             <Select value={placeFilter} onValueChange={setPlaceFilter}>
               <SelectTrigger className="h-8 w-[160px] text-xs">
                 <Filter className="h-3 w-3 mr-1.5 shrink-0" />
@@ -277,158 +374,161 @@ export const ScheduleTable = React.memo(function ScheduleTable({ schedule }: Sch
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={isAllExpanded ? collapseAll : expandAll}
-              className="text-xs gap-1"
-            >
-              {isAllExpanded ? (
-                <><ChevronRight className="h-3 w-3" />Collapse</>
-              ) : (
-                <><ChevronDown className="h-3 w-3" />Expand All</>
-              )}
+            {!readOnly && (
+              <Button variant="outline" size="sm" onClick={isAllExpanded ? collapseAll : expandAll} className="h-8 text-xs gap-1.5 hidden md:flex">
+                {isAllExpanded ? (
+                  <><ChevronRight className="h-3 w-3" />Collapse All</>
+                ) : (
+                  <><ChevronDown className="h-3 w-3" />Expand All</>
+                )}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={exportXLSX} className="text-xs gap-1.5 h-8">
+              <Download className="h-3.5 w-3.5" /> Export Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={exportCSV} className="text-xs gap-1.5">
-              <Download className="h-3.5 w-3.5" />
-              CSV
+            <Button variant="outline" size="sm" onClick={() => window.print()} className="text-xs gap-1.5 h-8 print:hidden">
+              <Printer className="h-3.5 w-3.5" /> Print / PDF
             </Button>
           </div>
         </div>
+        {viewMode === "table" && slotLegend}
       </CardHeader>
       <CardContent className="p-0">
-        <div className="scrollable-panel max-h-[700px]">
-          <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {groupedByCenter.map((center) => {
-              const isExpanded = expandedSet.has(center.name);
-              const totalEntries = center.entries.length;
-              const liveCount = center.entries.filter((e) => e.entry.nameOfSK !== "VCD").length;
-              const vcdCount = totalEntries - liveCount;
-              const firstDate = center.entries[0]?.entry.date || "";
-              const lastDate = center.entries[center.entries.length - 1]?.entry.date || "";
-
-              return (
-                <div key={center.name} className="w-full">
-                  {/* Center header */}
-                  <button
-                    onClick={() => toggleCenter(center.name)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${categoryIconBg[center.category] || "bg-gray-100 text-gray-700"}`}>
-                        <MapPin className="h-4 w-4" />
-                      </div>
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Badge className={`${categoryColors[center.category] || ""} text-[9px] px-1.5 py-0 border-0 shrink-0`}>
-                          {categoryLabels[center.category] || center.category}
-                        </Badge>
-                        <span className="text-sm font-semibold text-foreground truncate">{center.name}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 ml-2">
-                      <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <span>{totalEntries} session{totalEntries > 1 ? "s" : ""}</span>
-                        <span className="text-emerald-600">{liveCount} live</span>
-                        {vcdCount > 0 && <span className="text-purple-600">{vcdCount} VCD</span>}
-                        <span className="text-gray-500">{firstDate}{firstDate !== lastDate ? ` → ${lastDate}` : ""}</span>
-                      </div>
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </div>
-                  </button>
-
-                  {/* Expanded: show all entries for this center sorted by date */}
-                  {isExpanded && (
-                    <div className="px-4 pb-4">
-                      <div className="rounded-lg border overflow-x-auto overflow-y-hidden">
-                        <Table className="min-w-[600px] md:min-w-full">
-                          <TableHeader>
-                            <TableRow className="bg-gray-50 dark:bg-gray-900/40">
-                              <TableHead className="text-xs">Date</TableHead>
-                              <TableHead className="text-xs">Time</TableHead>
-                              <TableHead className="text-xs">SK</TableHead>
-                              <TableHead className="text-xs hidden md:table-cell">Shabad</TableHead>
-                              <TableHead className="text-xs text-center">
-                                <span className="text-sky-600 font-semibold">A</span>
-                              </TableHead>
-                              <TableHead className="text-xs text-center">
-                                <span className="text-emerald-600 font-semibold">B</span>
-                              </TableHead>
-                              <TableHead className="text-xs text-center">
-                                <span className="text-amber-600 font-semibold">C</span>
-                              </TableHead>
-                              {hasAnyBaalSatsang && (
-                                <TableHead className="text-xs text-center">
-                                  <span className="text-purple-600 font-semibold">D</span>
-                                </TableHead>
-                              )}
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {center.entries.map((e, i) => {
-                              const isVCD = e.entry.nameOfSK === "VCD";
-                              const isBaal = e.hasBaalSatsang;
-                              return (
-                                <TableRow
-                                  key={`${e.entry.date}-${e.gharName}-${i}`}
-                                  className={`
-                                    ${isVCD ? "opacity-60 bg-gray-50/50 dark:bg-gray-900/10" : ""}
-                                    ${isBaal && !isVCD ? "bg-purple-50/20 dark:bg-purple-950/10" : ""}
-                                  `}
-                                >
-                                  <TableCell className="text-xs whitespace-nowrap py-2">
-                                    <span className="font-medium text-gray-600 dark:text-gray-400">{e.entry.date}</span>
-                                  </TableCell>
-                                  <TableCell className="text-xs whitespace-nowrap py-2">
-                                    <span className="font-medium">{e.entry.time}</span>
-                                  </TableCell>
-                                  <TableCell className="text-xs py-2">
-                                    {isVCD ? (
-                                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-dashed border-gray-300 text-gray-500">
-                                        VCD
-                                      </Badge>
-                                    ) : (
-                                      <span className="font-medium truncate max-w-[100px] block" title={e.entry.nameOfSK}>
-                                        {e.entry.nameOfSK}
-                                      </span>
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="text-xs py-2 hidden md:table-cell">
-                                    <span className="line-clamp-1 text-muted-foreground" title={e.entry.shabad}>
-                                      {e.entry.shabad || "—"}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="text-center py-2">
-                                    {pathiBadge(e.pathiA, "A")}
-                                  </TableCell>
-                                  <TableCell className="text-center py-2">
-                                    {pathiBadge(e.pathiB, "B")}
-                                  </TableCell>
-                                  <TableCell className="text-center py-2">
-                                    {pathiBadge(e.pathiC, "C")}
-                                  </TableCell>
-                                  {hasAnyBaalSatsang && (
-                                    <TableCell className="text-center py-2">
-                                      {isBaal ? pathiBadge(e.pathiD, "D") : <span className="text-muted-foreground/30 text-xs">—</span>}
-                                    </TableCell>
-                                  )}
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                      {slotLegend}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+        {viewMode === "calendar" ? (
+          <div className="p-4 bg-gray-50/50 min-h-[500px]">
+             <CalendarView schedule={schedule} />
           </div>
-        </div>
+        ) : (
+          <div className="scrollable-panel max-h-[700px]">
+            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              {groupedByCenter.map((center) => {
+                const isExpanded = expandedSet.has(center.name);
+                const totalEntries = center.entries.length;
+                const liveCount = center.entries.filter((e) => e.entry.nameOfSK !== "VCD").length;
+                const vcdCount = totalEntries - liveCount;
+                const firstDate = center.entries[0]?.entry.date || "";
+                const lastDate = center.entries[center.entries.length - 1]?.entry.date || "";
+
+                return (
+                  <div key={center.name} className="w-full">
+                    <button
+                      onClick={() => toggleCenter(center.name)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${categoryIconBg[center.category] || "bg-gray-100 text-gray-700"}`}>
+                          <MapPin className="h-4 w-4" />
+                        </div>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Badge className={`${categoryColors[center.category] || ""} text-[9px] px-1.5 py-0 border-0 shrink-0`}>
+                            {categoryLabels[center.category] || center.category}
+                          </Badge>
+                          <span className="text-sm font-semibold text-foreground truncate">{center.name}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0 ml-2">
+                        <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>{totalEntries} session{totalEntries > 1 ? "s" : ""}</span>
+                          <span className="text-emerald-600">{liveCount} live</span>
+                          {vcdCount > 0 && <span className="text-purple-600">{vcdCount} VCD</span>}
+                          <span className="text-gray-500">{firstDate}{firstDate !== lastDate ? ` → ${lastDate}` : ""}</span>
+                        </div>
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="px-4 pb-4">
+                        <div className="rounded-lg border overflow-x-auto overflow-y-hidden">
+                          <Table className="min-w-[600px] md:min-w-full">
+                            <TableHeader>
+                              <TableRow className="bg-gray-50 dark:bg-gray-900/40">
+                                <TableHead className="text-xs">Date</TableHead>
+                                <TableHead className="text-xs">Time</TableHead>
+                                <TableHead className="text-xs">SK</TableHead>
+                                <TableHead className="text-xs hidden md:table-cell">Shabad</TableHead>
+                                <TableHead className="text-xs text-center">
+                                  <span className="text-sky-600 font-semibold">A</span>
+                                </TableHead>
+                                <TableHead className="text-xs text-center">
+                                  <span className="text-emerald-600 font-semibold">B</span>
+                                </TableHead>
+                                <TableHead className="text-xs text-center">
+                                  <span className="text-amber-600 font-semibold">C</span>
+                                </TableHead>
+                                {hasAnyBaalSatsang && (
+                                  <TableHead className="text-xs text-center">
+                                    <span className="text-purple-600 font-semibold">D</span>
+                                  </TableHead>
+                                )}
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {center.entries.map((e, i) => {
+                                const isVCD = e.entry.nameOfSK === "VCD";
+                                const isBaal = e.hasBaalSatsang;
+                                return (
+                                  <TableRow
+                                    key={`${e.entry.date}-${e.gharName}-${i}`}
+                                    className={`
+                                      ${isVCD ? "opacity-60 bg-gray-50/50 dark:bg-gray-900/10" : ""}
+                                      ${isBaal && !isVCD ? "bg-purple-50/20 dark:bg-purple-950/10" : ""}
+                                    `}
+                                  >
+                                    <TableCell className="text-xs whitespace-nowrap py-2">
+                                      <span className="font-medium text-gray-600 dark:text-gray-400">{e.entry.date}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs whitespace-nowrap py-2">
+                                      <span className="font-medium">{e.entry.time}</span>
+                                    </TableCell>
+                                    <TableCell className="text-xs py-2">
+                                      {isVCD ? (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-dashed border-gray-300 text-gray-500">
+                                          VCD
+                                        </Badge>
+                                      ) : (
+                                        <span className="font-medium truncate max-w-[100px] block" title={e.entry.nameOfSK}>
+                                          {e.entry.nameOfSK}
+                                        </span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-xs py-2 hidden md:table-cell">
+                                      <span className="line-clamp-1 text-muted-foreground" title={e.entry.shabad}>
+                                        {e.entry.shabad || "—"}
+                                      </span>
+                                    </TableCell>
+                                    <TableCell className="text-center py-1">
+                                      {renderDraggableBadge(e.pathiA, "A", e.entry.date, e.gharName, "pathiA")}
+                                    </TableCell>
+                                    <TableCell className="text-center py-1">
+                                      {renderDraggableBadge(e.pathiB, "B", e.entry.date, e.gharName, "pathiB")}
+                                    </TableCell>
+                                    <TableCell className="text-center py-1">
+                                      {renderDraggableBadge(e.pathiC, "C", e.entry.date, e.gharName, "pathiC")}
+                                    </TableCell>
+                                    {hasAnyBaalSatsang && (
+                                      <TableCell className="text-center py-1">
+                                        {isBaal ? renderDraggableBadge(e.pathiD, "D", e.entry.date, e.gharName, "pathiD") : <span className="text-muted-foreground/30 text-[10px]">—</span>}
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
