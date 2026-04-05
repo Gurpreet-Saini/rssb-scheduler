@@ -62,14 +62,12 @@ function SidebarContent({
     <div className="flex h-full flex-col bg-white border-r border-gray-200">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100">
-          <Calendar className="h-5 w-5 text-amber-700" />
-        </div>
+        <img src="/logo.png" alt="RSSB" className="h-9 w-9 rounded-lg object-cover shrink-0" />
         <div className="min-w-0">
           <h2 className="text-sm font-bold text-foreground truncate">
-            Satsang Schedule
+            Radha Soami Satsang Beas
           </h2>
-          <p className="text-[11px] text-muted-foreground">Management System</p>
+          <p className="text-[11px] text-muted-foreground">Schedule Management</p>
         </div>
       </div>
 

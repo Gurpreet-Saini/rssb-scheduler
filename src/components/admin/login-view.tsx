@@ -56,12 +56,10 @@ export function LoginView() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 shadow-sm mb-4">
-            <Calendar className="h-7 w-7 text-amber-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Satsang Schedule System</h1>
+          <img src="/logo.png" alt="RSSB" className="h-16 w-16 rounded-2xl object-cover mx-auto mb-4 shadow-sm" />
+          <h1 className="text-2xl font-bold text-foreground">Radha Soami Satsang Beas</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Sign in to manage schedules and pathis
+            Satsang Schedule Management System
           </p>
         </div>
 
