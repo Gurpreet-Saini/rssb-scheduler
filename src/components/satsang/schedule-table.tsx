@@ -343,8 +343,8 @@ export function ScheduleTable({ schedule }: ScheduleTableProps) {
                   {/* Expanded: show all entries for this center sorted by date */}
                   {isExpanded && (
                     <div className="px-4 pb-4">
-                      <div className="rounded-lg border overflow-hidden">
-                        <Table>
+                      <div className="rounded-lg border overflow-x-auto overflow-y-hidden">
+                        <Table className="min-w-[600px] md:min-w-full">
                           <TableHeader>
                             <TableRow className="bg-gray-50 dark:bg-gray-900/40">
                               <TableHead className="text-xs">Date</TableHead>

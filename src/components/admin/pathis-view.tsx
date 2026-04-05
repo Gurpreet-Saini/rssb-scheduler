@@ -264,12 +264,12 @@ export function PathisView() {
       </div>
 
       {hasUnsavedChanges && (
-        <div className="sticky top-4 z-10 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm">
+        <div className="sticky top-4 z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-600" />
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
             <span className="text-sm font-medium text-amber-900">You have unsaved slot configurations</span>
           </div>
-          <Button onClick={handleSaveConfigurations} disabled={isSaving} className="gap-2 bg-amber-600 hover:bg-amber-700">
+          <Button onClick={handleSaveConfigurations} disabled={isSaving} className="w-full sm:w-auto gap-2 bg-amber-600 hover:bg-amber-700 shrink-0">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save Changes
           </Button>

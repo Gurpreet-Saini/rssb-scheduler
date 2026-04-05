@@ -656,10 +656,12 @@ export function ScheduleWizardView() {
           {/* Global Slot Toggle Bar */}
           <Card className="rounded-xl overflow-hidden border-2 border-dashed border-gray-200">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-amber-600" />
-                Enable Assignment Slots
-                <Badge variant="secondary" className="ml-auto text-xs">
+              <CardTitle className="text-sm font-semibold flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-amber-600" />
+                  Enable Assignment Slots
+                </div>
+                <Badge variant="secondary" className="sm:ml-auto text-xs w-fit">
                   {enabledSlotCount} of {ALL_SLOTS.length} active
                 </Badge>
               </CardTitle>
