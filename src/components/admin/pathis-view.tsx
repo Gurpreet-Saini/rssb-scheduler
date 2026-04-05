@@ -126,27 +126,39 @@ export function PathisView() {
       return;
     }
 
-    setIsAdding(true);
-    try {
-      const res = await fetch("/api/pathis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newPathiName.trim(),
-          centerId: effectiveCenterId,
-          slots: ["A", "B", "C"],
-        }),
-      });
+    const namesToAdd = newPathiName.split(',').map(n => n.trim()).filter(n => n.length > 0);
+    if (namesToAdd.length === 0) {
+      toast.error("Please enter a valid pathi name");
+      return;
+    }
 
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to add pathi");
-        return;
+    setIsAdding(true);
+    let successCount = 0;
+    try {
+      for (const name of namesToAdd) {
+        const res = await fetch("/api/pathis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            centerId: effectiveCenterId,
+            slots: ["A", "B", "C"],
+          }),
+        });
+
+        if (res.ok) {
+          successCount++;
+        } else {
+          const data = await res.json();
+          toast.error(data.error || `Failed to add ${name}`);
+        }
       }
 
-      toast.success(`Added: ${newPathiName.trim()}`);
-      setNewPathiName("");
-      fetchPathis();
+      if (successCount > 0) {
+        toast.success(`Added ${successCount} pathi${successCount > 1 ? 's' : ''}`);
+        setNewPathiName("");
+        fetchPathis();
+      }
     } catch {
       toast.error("Network error");
     } finally {
@@ -277,7 +289,7 @@ export function PathisView() {
         <CardContent className="p-4">
           <div className="flex gap-2">
             <Input
-              placeholder="Enter pathi name..."
+              placeholder="Enter pathi names (comma separated)..."
               value={newPathiName}
               onChange={(e) => setNewPathiName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddPathi()}
