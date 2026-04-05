@@ -389,19 +389,23 @@ export function PathisView() {
                         {ALL_SLOTS.map((slot) => {
                           const isEnabled = slots.includes(slot);
                           return (
-                            <button
+                            <div
                               key={slot}
-                              onClick={() => toggleSlot(pathi, slot)}
-                              disabled={isSaving}
-                              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                              className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
                                 isEnabled
-                                  ? slotColors[slot]
-                                  : "text-gray-400 bg-gray-50 border-gray-200 opacity-50"
+                                  ? slotColors[slot].replace("border-", "border-").replace("bg-", "bg-") 
+                                  : "text-gray-400 bg-gray-50 border-gray-200 opacity-60"
                               }`}
                               title={`Toggle ${slotLabels[slot]}`}
                             >
-                              {slot}
-                            </button>
+                              <span className="text-xs font-bold w-3 text-center">{slot}</span>
+                              <Switch
+                                checked={isEnabled}
+                                onCheckedChange={() => toggleSlot(pathi, slot)}
+                                disabled={isSaving}
+                                className="scale-75 origin-center -mx-1"
+                              />
+                            </div>
                           );
                         })}
                       </div>
