@@ -102,15 +102,20 @@ export function SavedReportsView() {
   }, [fetchSchedules]);
 
   const handleLoad = async (schedule: SavedSchedule) => {
+    setIsLoading(true);
     try {
+      const res = await fetch(`/api/schedules/saved/${schedule.id}`);
+      if (!res.ok) throw new Error("Failed to load");
+      const { schedule: fullSchedule } = await res.json();
+
       // Parse the saved schedule data
-      const scheduleData = JSON.parse(schedule.scheduleData);
+      const scheduleData = JSON.parse(fullSchedule.scheduleData);
       setGeneratedSchedule(scheduleData);
       setScheduleData(scheduleData.originalSchedule || null);
 
       // Parse pathi config for baal satsang ghars
       try {
-        const pathiConfig = JSON.parse(schedule.pathiConfig);
+        const pathiConfig = JSON.parse(fullSchedule.pathiConfig);
         if (pathiConfig.baalSatsangGhars) {
           setBaalSatsangGhars(pathiConfig.baalSatsangGhars);
         }
@@ -122,6 +127,8 @@ export function SavedReportsView() {
       setCurrentView("schedule");
     } catch {
       toast.error("Failed to load schedule data. It may be corrupted.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -148,7 +155,11 @@ export function SavedReportsView() {
   const handleExportJSON = async (schedule: SavedSchedule) => {
     setIsExporting(schedule.id);
     try {
-      const data = JSON.parse(schedule.scheduleData);
+      const res = await fetch(`/api/schedules/saved/${schedule.id}`);
+      if (!res.ok) throw new Error("Failed to load");
+      const { schedule: fullSchedule } = await res.json();
+
+      const data = JSON.parse(fullSchedule.scheduleData);
       const blob = new Blob([JSON.stringify(data, null, 2)], {
         type: "application/json",
       });

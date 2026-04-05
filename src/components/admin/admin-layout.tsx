@@ -150,6 +150,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = useAppStore((s) => s.user);
   const currentView = useAppStore((s) => s.currentView);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const logout = useAppStore((s) => s.logout);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!user) return null;
@@ -172,20 +173,25 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-100">
                 <Calendar className="h-4 w-4 text-amber-700" />
               </div>
-              <span className="text-sm font-bold">Satsang Schedule</span>
+              <span className="text-sm font-bold hidden sm:inline-block">Satsang Schedule</span>
             </div>
           </div>
-          <Badge
-            variant="secondary"
-            className={cn(
-              "text-[9px] px-1.5 py-0 font-semibold border-0",
-              user.role === "SUPER_ADMIN"
-                ? "bg-amber-100 text-amber-700"
-                : "bg-emerald-100 text-emerald-700"
-            )}
-          >
-            {user.displayName}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="secondary"
+              className={cn(
+                "text-[9px] px-1.5 py-0 font-semibold border-0",
+                user.role === "SUPER_ADMIN"
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-emerald-100 text-emerald-700"
+              )}
+            >
+              {user.displayName}
+            </Badge>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50" onClick={logout}>
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 

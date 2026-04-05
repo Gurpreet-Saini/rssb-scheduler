@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
 
     const schedules = await db.savedSchedule.findMany({
       where: { centerId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        createdAt: true,
+        centerId: true,
         user: {
           select: { id: true, username: true, displayName: true },
         },
