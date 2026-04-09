@@ -40,31 +40,60 @@ function getVal(sheet: XLSX.WorkSheet, cell: string): string {
   return String(c.v).trim();
 }
 
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 function formatExcelDate(raw: string): string {
   if (!raw) return "";
-  // Excel serial date or already formatted
+
+  // Already in "DD MMM YYYY" format (e.g. "06 Apr 2026")
+  if (/^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$/.test(raw.trim())) {
+    return raw.trim();
+  }
+
+  // ISO "YYYY-MM-DD" format
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
     const d = new Date(raw + "T00:00:00");
     if (!isNaN(d.getTime())) {
-      return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const day = String(d.getDate()).padStart(2, "0");
+      const month = SHORT_MONTHS[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day} ${month} ${year}`;
     }
   }
-  // Try parsing as Excel serial number
+
+  // Excel serial number
   const num = Number(raw);
   if (!isNaN(num) && num > 40000 && num < 60000) {
     const epoch = new Date(1899, 11, 30);
     epoch.setDate(epoch.getDate() + num);
-    return epoch.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+    const day = String(epoch.getDate()).padStart(2, "0");
+    const month = SHORT_MONTHS[epoch.getMonth()];
+    const year = epoch.getFullYear();
+    return `${day} ${month} ${year}`;
   }
+
   return raw;
 }
 
-const COL_LETTERS = ["E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q"];
+function getMonthTimeFromDate(dateStr: string): { month: string; time: string } {
+  // Expect format "DD MMM YYYY" e.g. "06 Apr 2026"
+  const match = /^\d{1,2}\s+([A-Za-z]{3})\s+\d{4}$/.exec(dateStr.trim());
+  const shortMonth = match ? match[1] : "";
 
-function getMonthTimeForCol(col: string, sheet: XLSX.WorkSheet): { month: string; time: string } {
-  if (["E", "F", "G", "H"].includes(col)) return { month: "April", time: "09:30 AM" };
-  if (["I", "J", "K", "L", "M"].includes(col)) return { month: "May", time: "09:00 AM" };
-  return { month: "June", time: "09:00 AM" };
+  // April has 09:30 AM, others 09:00 AM
+  const time = shortMonth === "Apr" ? "09:30 AM" : "09:00 AM";
+
+  // Map short month to full month name for consistency
+  const monthMap: Record<string, string> = {
+    Jan: "January", Feb: "February", Mar: "March", Apr: "April",
+    May: "May", Jun: "June", Jul: "July", Aug: "August",
+    Sep: "September", Oct: "October", Nov: "November", Dec: "December",
+  };
+
+  return {
+    month: shortMonth ? (monthMap[shortMonth] || shortMonth) : "",
+    time,
+  };
 }
 
 export function parseExcelBuffer(buffer: ArrayBuffer): SatsangSchedule {
@@ -75,30 +104,39 @@ export function parseExcelBuffer(buffer: ArrayBuffer): SatsangSchedule {
   // Title from A1
   const title = getVal(sheet, "A1") || "Satsang Schedule";
 
-  // Read dates from row 4
+  // Dynamic column detection: read dates from row 4 starting at column E (index 4)
+  const columns: string[] = [];
   const dateMap: Record<string, string> = {};
-  for (const col of COL_LETTERS) {
-    const raw = getVal(sheet, `${col}4`);
-    dateMap[col] = formatExcelDate(raw);
+  
+  // Starting from column E (index 4) up to a reasonable limit (e.g. 50 columns)
+  for (let c = 4; c < 50; c++) {
+    const colLetter = XLSX.utils.encode_col(c);
+    const raw = getVal(sheet, `${colLetter}4`);
+    if (!raw) break; // Stop at first empty date
+    
+    columns.push(colLetter);
+    dateMap[colLetter] = formatExcelDate(raw);
   }
 
-  // Parse each satsang ghar (rows 5, 9, 13, 17, 21 — every 4 rows)
+  // Parse each satsang ghar (starting row 5, every 4 rows)
   const ghars: SatsangGhar[] = [];
-  for (let row = 5; row <= 24; row += 4) {
+  // Dynamic row detection: continue as long as Sr No exists in column A
+  for (let row = 5; row <= 500; row += 4) {
     const srNoStr = getVal(sheet, `A${row}`);
-    if (!srNoStr) continue;
+    if (!srNoStr) break;
 
     const srNo = parseInt(srNoStr, 10) || 0;
     const name = getVal(sheet, `B${row}`);
     const category = getVal(sheet, `C${row}`);
     const entries: SatsangEntry[] = [];
 
-    for (const col of COL_LETTERS) {
-      const { month, time } = getMonthTimeForCol(col, sheet);
+    for (const col of columns) {
+      const dateStr = dateMap[col] || "";
+      const { month, time } = getMonthTimeFromDate(dateStr);
       const colNum = XLSX.utils.decode_col(col);
 
       entries.push({
-        date: dateMap[col] || "",
+        date: dateStr,
         month,
         time,
         nameOfSK: getVal(sheet, XLSX.utils.encode_cell({ r: row - 1, c: colNum })),
@@ -119,6 +157,7 @@ export function parseExcelBuffer(buffer: ArrayBuffer): SatsangSchedule {
 
   for (const ghar of ghars) {
     for (const entry of ghar.entries) {
+      if (!entry.date) continue; // Skip empty entries if any
       totalSessions++;
       if (entry.nameOfSK === "VCD") {
         vcdSessions++;

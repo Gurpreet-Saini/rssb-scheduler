@@ -164,10 +164,25 @@ export function assignPathis(
   };
   const historicalCounts = 'historicalCounts' in config ? config.historicalCounts : undefined;
 
-  for (const slot of ["A", "B", "C", "D"]) {
-    for (const pathi of pathis) {
-      // Seed algorithm with historical weight so under-assigned Pathis from previous months get highly prioritized organically
-      slotCounts[slot][pathi] = historicalCounts && historicalCounts[pathi] ? historicalCounts[pathi] : 0;
+  for (const pathi of pathis) {
+    // Count how many slots this pathi is eligible for
+    let eligibleSlotCount = 0;
+    for (const s of ["A", "B", "C", "D"]) {
+      const isEligible = pathiSlots ? (pathiSlots[pathi] ? pathiSlots[pathi].includes(s) : true) : true;
+      if (isEligible) eligibleSlotCount++;
+    }
+
+    const rawHistory = historicalCounts && historicalCounts[pathi] ? historicalCounts[pathi] : 0;
+    // Divvy up their total historical load roughly equally across their eligible slots
+    const seedValue = Math.ceil(rawHistory / Math.max(1, eligibleSlotCount));
+
+    for (const slot of ["A", "B", "C", "D"]) {
+      const isEligibleForSlot = pathiSlots ? (pathiSlots[pathi] ? pathiSlots[pathi].includes(slot) : true) : true;
+      if (isEligibleForSlot) {
+        slotCounts[slot][pathi] = seedValue;
+      } else {
+        slotCounts[slot][pathi] = 0; // ineligible = 0
+      }
     }
   }
 
@@ -225,61 +240,73 @@ export function assignPathis(
 
   const flatEntries: AssignedScheduleEntry[] = [];
 
+  let slotEvalIndex = 0;
+
   for (const dateKey of dateMap) {
     const entriesForDate = dateEntriesMap[dateKey];
 
     // CRITICAL: Per-date booking. A pathi can fill at most ONE slot
-    // across ALL ghars on this date. All satsangs happen at the same time,
-    // so a person physically cannot be at two places on the same day.
+    // across ALL ghars on this date. All satsangs happen at the same time.
     const bookedForDate: Set<string> = new Set();
+    const assignmentMaps: Record<string, string>[] = entriesForDate.map(() => ({ A: "N/A", B: "", C: "", D: "" }));
 
-    for (const de of entriesForDate) {
+    // PASS 1: Allocate scarce slots (Slot D for Baal Satsang) FIRST for the entire date.
+    // If we don't do this, pathis with D-eligibility might be consumed by plentiful A/B/C 
+    // assignments before their D-assignment is even evaluated, breaking the D distribution.
+    entriesForDate.forEach((de, idx) => {
+      if (de.hasBaalSatsang) {
+        const assigned = pickPathiBalanced(
+          slotCounts["D"], pathis, bookedForDate, slotRotation, "D", 
+          pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts
+        );
+        bookedForDate.add(assigned);
+        slotCounts["D"][assigned]++;
+        gharSlotCounts[`D|${de.gharName}`][assigned]++;
+        assignmentMaps[idx].D = assigned;
+      }
+    });
+
+    // PASS 2: Allocate common slots (A, B, C) with dynamic rotating evaluation order
+    entriesForDate.forEach((de, idx) => {
       const isVCD = de.entry.nameOfSK === "VCD";
 
-      let assignedA = "N/A";
-      let assignedB = "";
-      let assignedC = "";
-      let assignedD = "";
+      // Determine which slots need to be filled for this ghar
+      const availableSlots = ["B", "C"];
+      if (!isVCD) availableSlots.push("A");
 
-      // Slot-A: only for live sessions (not VCD)
-      if (!isVCD) {
-        assignedA = pickPathiBalanced(slotCounts["A"], pathis, bookedForDate, slotRotation, "A", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
-        bookedForDate.add(assignedA); // Person is now at this place — cannot go anywhere else today
-        slotCounts["A"][assignedA]++;
-        gharSlotCounts["A|" + de.gharName][assignedA]++;
+      // Sort deterministically
+      availableSlots.sort();
+      const currentSlots = [...availableSlots];
+      
+      // Rotate the evaluation order so that pathis catching up 
+      // get assigned across their eligible slots dynamically, rather than always slot A
+      for (let i = 0; i < slotEvalIndex % currentSlots.length; i++) {
+        currentSlots.push(currentSlots.shift()!);
       }
+      slotEvalIndex++;
 
-      // Slot-B: for all sessions (including VCD)
-      assignedB = pickPathiBalanced(slotCounts["B"], pathis, bookedForDate, slotRotation, "B", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
-      bookedForDate.add(assignedB); // Person cannot go anywhere else today
-      slotCounts["B"][assignedB]++;
-      gharSlotCounts["B|" + de.gharName][assignedB]++;
-
-      // Slot-C: for all sessions (including VCD)
-      assignedC = pickPathiBalanced(slotCounts["C"], pathis, bookedForDate, slotRotation, "C", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
-      bookedForDate.add(assignedC);
-      slotCounts["C"][assignedC]++;
-      gharSlotCounts["C|" + de.gharName][assignedC]++;
-
-      // Slot-D: only for Baal Satsang ghars
-      if (de.hasBaalSatsang) {
-        assignedD = pickPathiBalanced(slotCounts["D"], pathis, bookedForDate, slotRotation, "D", pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts);
-        bookedForDate.add(assignedD);
-        slotCounts["D"][assignedD]++;
-        gharSlotCounts["D|" + de.gharName][assignedD]++;
+      for (const slotName of currentSlots) {
+        const assigned = pickPathiBalanced(
+          slotCounts[slotName], pathis, bookedForDate, slotRotation, slotName, 
+          pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts
+        );
+        bookedForDate.add(assigned);
+        slotCounts[slotName][assigned]++;
+        gharSlotCounts[`${slotName}|${de.gharName}`][assigned]++;
+        assignmentMaps[idx][slotName] = assigned;
       }
 
       flatEntries.push({
         entry: de.entry,
         gharName: de.gharName,
         gharCategory: de.gharCategory,
-        pathiA: assignedA,
-        pathiB: assignedB,
-        pathiC: assignedC,
-        pathiD: assignedD,
+        pathiA: assignmentMaps[idx].A,
+        pathiB: assignmentMaps[idx].B,
+        pathiC: assignmentMaps[idx].C,
+        pathiD: assignmentMaps[idx].D,
         hasBaalSatsang: de.hasBaalSatsang,
       });
-    }
+    });
   }
 
   flatEntries.sort((a, b) => {
@@ -336,10 +363,28 @@ function pickPathiBalanced(
   }
 
   if (available.length === 0) {
-    // All pathis already booked on this date.
-    // This means there aren't enough pathis for the number of slots.
-    // Fallback: pick the least-assigned pathi for this slot overall (cross-date).
-    const sorted = [...pathis].sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0));
+    // All pathis already booked on this date — not enough pathis for the slot count.
+    // Fallback: pick the least-assigned pathi for this slot, but STILL respect
+    // slot eligibility and ghar exclusions to prevent invalid assignments.
+    let fallback = [...pathis];
+    if (pathiSlots) {
+      fallback = fallback.filter((p) => {
+        const eligible = pathiSlots[p];
+        return eligible ? eligible.includes(slotName) : true;
+      });
+    }
+    if (pathiExcludedGhars && currentGharName) {
+      fallback = fallback.filter((p) => {
+        const excluded = pathiExcludedGhars[p];
+        return excluded ? !excluded.includes(currentGharName) : true;
+      });
+    }
+    if (fallback.length === 0) {
+      // Absolute last resort: no eligible pathis at all — pick globally least assigned
+      const sorted = [...pathis].sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0));
+      return sorted[0];
+    }
+    const sorted = [...fallback].sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0));
     return sorted[0];
   }
 
@@ -469,7 +514,8 @@ function calculateMetrics(
 
   const skMap: Record<string, { live: number; vcd: number }> = {};
   for (const e of entries) {
-    const sk = e.entry.nameOfSK || "Unknown";
+    const sk = e.entry.nameOfSK;
+    if (!sk) continue; // skip empty cells — no speaker assigned
     if (!skMap[sk]) skMap[sk] = { live: 0, vcd: 0 };
     if (sk === "VCD") skMap[sk].vcd++;
     else skMap[sk].live++;
