@@ -528,22 +528,29 @@ export function ScheduleWizardView() {
     sheetRows.push(headerRow);
 
     let lastCenter = "";
+    let lastDate = "";
+
     for (const row of rows) {
       // Add separator row when center changes
       if (row.center !== lastCenter) {
         if (lastCenter !== "") {
-          // blank separator
+          // blank separator between centers
           sheetRows.push([]);
         }
         // Center header row
         sheetRows.push([`=== ${row.center} ===`, "", "", "", "", "", "", "", "", ""]);
         lastCenter = row.center;
+        lastDate = ""; // reset date tracking when center changes
       }
+
+      // Only show date/day on the first row of each date within that center
+      const isNewDate = row.date !== lastDate;
+      if (isNewDate) lastDate = row.date;
 
       sheetRows.push([
         row.center,
-        row.date,
-        row.day,
+        isNewDate ? row.date : "",   // blank date if same as previous row
+        isNewDate ? row.day : "",    // blank day if same as previous row
         row.time,
         row.place,
         row.skName,
