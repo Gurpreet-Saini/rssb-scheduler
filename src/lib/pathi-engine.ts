@@ -216,6 +216,9 @@ export function assignPathis(
     const hasBaal = baalSatsangGhars.includes(ghar.name);
     for (const entry of ghar.entries) {
       if (!entry.date) continue;
+      // Skip entries with no data at all — place has no session on this date
+      const hasData = entry.nameOfSK || entry.shabad || entry.bani || entry.book;
+      if (!hasData) continue;
       const dk = entry.date;
       if (!dateEntriesMap[dk]) {
         dateEntriesMap[dk] = [];

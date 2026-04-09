@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import * as XLSX from "xlsx";
 import {
   Calendar, ChevronLeft, ChevronRight, RefreshCw,
   AlertTriangle, Save, Download, RotateCcw, Sparkles, Loader2, UserCog,
@@ -389,7 +390,12 @@ export function ScheduleWizardView() {
   }, [schedule, filteredPathis, baalSatsangGhars, wizardSlotToggles, getEffectiveSlots, pathiGharExclusions, setGeneratedSchedule]);
 
   const handleSaveReport = async () => {
-    if (!generatedSchedule || !reportName.trim()) return;
+    if (!generatedSchedule) return;
+    if (!reportName.trim()) {
+      toast.error("Please enter a report name");
+      return;
+    }
+    
     const cid = user?.role === "CENTER_ADMIN" ? user.centerId : (effectiveCenterId || selectedCenterId);
     if (!cid) {
       toast.error("No center selected");
@@ -420,15 +426,22 @@ export function ScheduleWizardView() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to save report");
+        let errorMsg = `Failed to save report (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data.error) errorMsg = data.error;
+        } catch (e) {
+          console.error("Non-JSON API error:", e);
+        }
+        toast.error(errorMsg);
         return;
       }
 
       toast.success(`Report "${reportName.trim()}" saved successfully!`);
       setSaveDialogOpen(false);
       setReportName("");
-    } catch {
+    } catch (err) {
+      console.error("Save report exception:", err);
       toast.error("Network error. Please try again.");
     } finally {
       setIsSaving(false);
@@ -462,74 +475,109 @@ export function ScheduleWizardView() {
     toast.success("JSON file downloaded");
   }, [generatedSchedule]);
 
-  // ===== Per-Pathi CSV Download =====
   const handleDownloadPathiList = useCallback(() => {
     if (!generatedSchedule) return;
 
-    // Collect all unique pathi names from the schedule
-    const pathiNameSet = new Set<string>();
+    // Collect all rows from the schedule
+    type RowData = {
+      center: string;
+      date: string;
+      dateSortable: string;
+      place: string;
+      day: string;
+      time: string;
+      skName: string;
+      pathiA: string;
+      pathiB: string;
+      pathiC: string;
+      pathiD: string;
+    };
+
+    const rows: RowData[] = [];
+
     for (const e of generatedSchedule.entries) {
-      if (e.pathiA && e.pathiA !== "N/A") pathiNameSet.add(e.pathiA);
-      if (e.pathiB) pathiNameSet.add(e.pathiB);
-      if (e.pathiC) pathiNameSet.add(e.pathiC);
-      if (e.pathiD) pathiNameSet.add(e.pathiD);
+      // Skip entries with no meaningful data
+      const hasAnyPathi = (e.pathiA && e.pathiA !== "N/A") || e.pathiB || e.pathiC || e.pathiD;
+      if (!hasAnyPathi) continue;
+
+      rows.push({
+        center: e.gharCategory || "Unknown",
+        date: e.entry.date,
+        dateSortable: parseDateSortable(e.entry.date),
+        place: e.gharName,
+        day: getDayOfWeek(e.entry.date),
+        time: e.entry.time || "",
+        skName: e.entry.nameOfSK || "",
+        pathiA: e.pathiA === "N/A" ? "" : (e.pathiA || ""),
+        pathiB: e.pathiB || "",
+        pathiC: e.pathiC || "",
+        pathiD: e.pathiD || "",
+      });
     }
-    const allPathiNames = Array.from(pathiNameSet).sort();
 
-    // For each pathi, build a list of assignments sorted by date
-    function csvEscape(s: string): string {
-      if (s.includes(",") || s.includes('"')) return '"' + s.replace(/"/g, '""') + '"';
-      return s;
-    }
+    // Sort by: center name → date → place
+    rows.sort((a, b) => {
+      if (a.center !== b.center) return a.center.localeCompare(b.center);
+      if (a.dateSortable !== b.dateSortable) return a.dateSortable.localeCompare(b.dateSortable);
+      return a.place.localeCompare(b.place);
+    });
 
-    // Generate CSV for each pathi
-    for (const pathiName of allPathiNames) {
-      const rows: string[] = [];
-      rows.push("Pathi Name,Place,Date,Day,Time,Slot");
-      rows.push(`${csvEscape(pathiName)},,,,,`);
+    // Build Excel sheet rows with center separators
+    const sheetRows: (string | number)[][] = [];
+    const headerRow = ["Center", "Date", "Day", "Time", "Place", "SK Name", "Pathi A", "Pathi B", "Pathi C", "Pathi D"];
+    sheetRows.push(headerRow);
 
-      const assignments: Array<{
-        place: string;
-        date: string;
-        day: string;
-        time: string;
-        slot: string;
-      }> = [];
-
-      for (const e of generatedSchedule.entries) {
-        const day = getDayOfWeek(e.entry.date);
-        const time = e.entry.time || "";
-        if (e.pathiA === pathiName) {
-          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "A" });
+    let lastCenter = "";
+    for (const row of rows) {
+      // Add separator row when center changes
+      if (row.center !== lastCenter) {
+        if (lastCenter !== "") {
+          // blank separator
+          sheetRows.push([]);
         }
-        if (e.pathiB === pathiName) {
-          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "B" });
-        }
-        if (e.pathiC === pathiName) {
-          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "C" });
-        }
-        if (e.pathiD === pathiName) {
-          assignments.push({ place: e.gharName, date: e.entry.date, day, time, slot: "D" });
-        }
+        // Center header row
+        sheetRows.push([`=== ${row.center} ===`, "", "", "", "", "", "", "", "", ""]);
+        lastCenter = row.center;
       }
 
-      // Sort by date
-      assignments.sort((a, b) => parseDateSortable(a.date).localeCompare(parseDateSortable(b.date)));
-
-      for (const a of assignments) {
-        rows.push("" + "," + csvEscape(a.place) + "," + csvEscape(a.date) + "," + a.day + "," + csvEscape(a.time) + "," + a.slot);
-      }
-
-      const blob = new Blob([rows.join("\n")], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `pathi_${pathiName.replace(/\s+/g, "_")}_schedule.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
+      sheetRows.push([
+        row.center,
+        row.date,
+        row.day,
+        row.time,
+        row.place,
+        row.skName,
+        row.pathiA,
+        row.pathiB,
+        row.pathiC,
+        row.pathiD,
+      ]);
     }
 
-    toast.success(`Downloaded ${allPathiNames.length} pathi schedule files`);
+    // Build XLSX workbook
+    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
+
+    // Style column widths
+    ws["!cols"] = [
+      { wch: 18 }, // Center
+      { wch: 14 }, // Date
+      { wch: 12 }, // Day
+      { wch: 12 }, // Time
+      { wch: 28 }, // Place
+      { wch: 20 }, // SK Name
+      { wch: 20 }, // Pathi A
+      { wch: 20 }, // Pathi B
+      { wch: 20 }, // Pathi C
+      { wch: 20 }, // Pathi D
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Schedule");
+
+    const fileName = `satsang_schedule_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+
+    toast.success(`Schedule exported: ${fileName}`);
   }, [generatedSchedule]);
 
   const toggleBaalSatsang = useCallback(
@@ -1125,7 +1173,7 @@ export function ScheduleWizardView() {
             </Button>
             <Button
               onClick={handleSaveReport}
-              disabled={isSaving || !reportName.trim()}
+              disabled={isSaving}
               className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
             >
               {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
