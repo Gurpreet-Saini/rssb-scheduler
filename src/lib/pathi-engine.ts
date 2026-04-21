@@ -179,7 +179,9 @@ export function assignPathis(
     for (const slot of ["A", "B", "C", "D"]) {
       const isEligibleForSlot = pathiSlots ? (pathiSlots[pathi] ? pathiSlots[pathi].includes(slot) : true) : true;
       if (isEligibleForSlot) {
-        slotCounts[slot][pathi] = seedValue;
+        // Do not skew D assignments based on overall global history, because D slots are so rare 
+        // that a small difference in seedValue causes complete monopolization of D slots by new pathis.
+        slotCounts[slot][pathi] = slot === "D" ? 0 : seedValue;
       } else {
         slotCounts[slot][pathi] = 0; // ineligible = 0
       }
@@ -262,9 +264,11 @@ export function assignPathis(
           slotCounts["D"], pathis, bookedForDate, slotRotation, "D", 
           pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts
         );
-        bookedForDate.add(assigned);
-        slotCounts["D"][assigned]++;
-        gharSlotCounts[`D|${de.gharName}`][assigned]++;
+        if (assigned !== "N/A") {
+          bookedForDate.add(assigned);
+          slotCounts["D"][assigned]++;
+          gharSlotCounts[`D|${de.gharName}`][assigned]++;
+        }
         assignmentMaps[idx].D = assigned;
       }
     });
@@ -293,9 +297,11 @@ export function assignPathis(
           slotCounts[slotName], pathis, bookedForDate, slotRotation, slotName, 
           pathiSlots, pathiExcludedGhars, de.gharName, gharSlotCounts
         );
-        bookedForDate.add(assigned);
-        slotCounts[slotName][assigned]++;
-        gharSlotCounts[`${slotName}|${de.gharName}`][assigned]++;
+        if (assigned !== "N/A") {
+          bookedForDate.add(assigned);
+          slotCounts[slotName][assigned]++;
+          gharSlotCounts[`${slotName}|${de.gharName}`][assigned]++;
+        }
         assignmentMaps[idx][slotName] = assigned;
       }
 
@@ -383,9 +389,8 @@ function pickPathiBalanced(
       });
     }
     if (fallback.length === 0) {
-      // Absolute last resort: no eligible pathis at all — pick globally least assigned
-      const sorted = [...pathis].sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0));
-      return sorted[0];
+      // Absolute last resort: no eligible pathis at all - return N/A instead of assigning an ineligible one
+      return "N/A";
     }
     const sorted = [...fallback].sort((a, b) => (counts[a] ?? 0) - (counts[b] ?? 0));
     return sorted[0];
